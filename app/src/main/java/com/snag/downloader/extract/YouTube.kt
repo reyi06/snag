@@ -18,17 +18,24 @@ import com.yausername.youtubedl_android.mapper.VideoFormat
 import com.yausername.youtubedl_android.mapper.VideoInfo
 import com.yausername.ffmpeg.FFmpeg
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
 
 /** yt-dlp initialization shared by YouTube videos and playlists. */
 internal object YouTubeClient {
 
     private val initMutex = Mutex()
+    private val infoCache = ConcurrentHashMap<String, CachedInfo>()
 
     @Volatile
     private var initialized = false
@@ -48,6 +55,22 @@ internal object YouTubeClient {
             }
         }
     }
+
+    suspend fun getInfo(url: String): VideoInfo = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        infoCache[url]?.takeIf { now - it.at < CACHE_TTL_MS }?.let { return@withContext it.info }
+        val request = YoutubeDLRequest(url).apply {
+            addOption("--no-playlist")
+            addOption("--no-warnings")
+        }
+        val info = YoutubeDL.getInstance().getInfo(request)
+        infoCache[url] = CachedInfo(info, now)
+        info
+    }
+
+    private data class CachedInfo(val info: VideoInfo, val at: Long)
+
+    private const val CACHE_TTL_MS = 10 * 60 * 1000L
 }
 
 /** Single YouTube video. Video and audio are separate formats from yt-dlp. */
@@ -68,12 +91,8 @@ internal class YouTubeStrategy(private val context: Context) : Strategy {
         if (YouTubePlaylistUrl.isPlaylist(url)) {
             throw ExtractionException.NoMedia(id, "playlist handled by the playlist extractor")
         }
-        val request = YoutubeDLRequest(url).apply {
-            addOption("--no-playlist")
-            addOption("--no-warnings")
-        }
         val info = try {
-            YoutubeDL.getInstance().getInfo(request)
+            YouTubeClient.getInfo(url)
         } catch (t: Throwable) {
             throw ExtractionException.Failed(id, t)
         }
@@ -85,8 +104,12 @@ internal class YouTubeStrategy(private val context: Context) : Strategy {
 /** Playlist metadata and full per-entry formats, shown in the shared batch sheet. */
 class YouTubePlaylistExtractor(private val context: Context) {
 
-    suspend fun fetch(url: String): ProfileBundle = withContext(Dispatchers.IO) {
+    suspend fun fetch(
+        url: String,
+        onProgress: (String) -> Unit = {},
+    ): ProfileBundle = withContext(Dispatchers.IO) {
         YouTubeClient.initialize(context)
+        onProgress("Loading playlist page.")
         val page = runCatching {
             Http.get(
                 url = url,
@@ -103,41 +126,47 @@ class YouTubePlaylistExtractor(private val context: Context) {
             throw ExtractionException.NoMedia("youtube-playlist", "playlist has no video IDs")
         }
 
-        var title = findText(root, "playlistHeaderRenderer", "title")
+        val title = findText(root, "playlistHeaderRenderer", "title")
             ?: findText(root, "playlistHeaderRenderer", "titleText")
             ?: Regex("""<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']""")
                 .find(page.body)?.groupValues?.get(1)
             ?: "YouTube playlist"
-        val entries = mutableListOf<MediaBundle>()
-        var avatar: String? = null
-        for (id in ids.take(MAX_PLAYLIST_ITEMS)) {
-            val request = YoutubeDLRequest("https://www.youtube.com/watch?v=$id").apply {
-                addOption("--no-playlist")
-                addOption("--no-warnings")
-            }
-            val info = runCatching { YoutubeDL.getInstance().getInfo(request) }
-                .getOrNull() ?: continue
-            val item = YouTubeMedia.fromInfo(info, "https://www.youtube.com/watch?v=$id")
-                ?: continue
-            if (entries.none { it.id == item.id }) entries.add(item)
-            if (avatar == null) avatar = item.coverUrl
+        val selected = ids.take(MAX_PLAYLIST_ITEMS)
+        val semaphore = Semaphore(PLAYLIST_CONCURRENCY)
+        val resolved = coroutineScope {
+            selected.mapIndexed { index, id ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        onProgress("Resolving playlist ${index + 1}/${selected.size}.")
+                        runCatching { YouTubeClient.getInfo("https://www.youtube.com/watch?v=$id") }
+                            .getOrNull()
+                            ?.let { info ->
+                                YouTubeMedia.fromInfo(
+                                    info,
+                                    "https://www.youtube.com/watch?v=$id",
+                                )
+                            }
+                    }
+                }
+            }.awaitAll()
         }
+        val entries = resolved.filterNotNull().distinctBy { it.id }
         if (entries.isEmpty()) {
             throw ExtractionException.NoMedia("youtube-playlist", "playlist entries could not be resolved")
         }
         val playlistId = YouTubePlaylistUrl.id(url) ?: "youtube"
-        val truncated = ids.size > entries.size
+        val truncated = ids.size > selected.size || entries.size < selected.size
         ProfileBundle(
             platform = SourcePlatform.YOUTUBE,
             url = url,
             handle = "_$playlistId",
             nickname = title,
-            avatarUrl = avatar,
+            avatarUrl = entries.firstOrNull()?.coverUrl,
             videoCount = entries.size.toLong(),
-            items = entries.toList(),
+            items = entries,
             provenance = "yt-dlp-playlist",
             note = if (truncated) {
-                "Showing the first ${entries.size} playlist videos."
+                "Showing ${entries.size} of ${maxOf(ids.size, selected.size)} playlist videos."
             } else {
                 "YouTube playlist"
             },
@@ -194,7 +223,8 @@ class YouTubePlaylistExtractor(private val context: Context) {
     }
 
     private companion object {
-        const val MAX_PLAYLIST_ITEMS = 20
+        const val MAX_PLAYLIST_ITEMS = 10
+        const val PLAYLIST_CONCURRENCY = 3
     }
 }
 

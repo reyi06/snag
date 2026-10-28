@@ -9,7 +9,10 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.snag.downloader.SnagApp
 import com.snag.downloader.core.MediaBundle
 import com.snag.downloader.core.MediaKind
@@ -25,9 +28,20 @@ import com.snag.downloader.data.Outcome
 import com.snag.downloader.data.ProfileBookmark
 import com.snag.downloader.data.QualityPreference
 import com.snag.downloader.data.TikTokSession
+import com.snag.downloader.download.DOWNLOAD_BYTES
+import com.snag.downloader.download.DOWNLOAD_INDEX
+import com.snag.downloader.download.DOWNLOAD_INDETERMINATE
+import com.snag.downloader.download.DOWNLOAD_PROGRESS
+import com.snag.downloader.download.DOWNLOAD_QUEUE_NAME
+import com.snag.downloader.download.DOWNLOAD_SPEED
+import com.snag.downloader.download.DOWNLOAD_TOTAL
+import com.snag.downloader.download.DOWNLOAD_TOTAL_BYTES
 import com.snag.downloader.download.DownloadJob
 import com.snag.downloader.download.DownloadScheduler
 import com.snag.downloader.extract.TikTokProfileUrl
+import com.snag.downloader.extract.YouTubePlaylistUrl
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 enum class Tab(val label: String) {
@@ -38,11 +52,22 @@ enum class Tab(val label: String) {
 
 sealed interface ResolveState {
     data object Idle : ResolveState
-    data object Loading : ResolveState
+    data class Loading(val message: String = "Reading link.") : ResolveState
     data class Media(val bundle: MediaBundle, val failures: List<StrategyFailure>) : ResolveState
     data class Profile(val profile: ProfileBundle) : ResolveState
     data class Failed(val message: String, val failures: List<StrategyFailure>) : ResolveState
 }
+
+/** Live progress for the single shared download queue. */
+data class ActiveDownload(
+    val percent: Int,
+    val indeterminate: Boolean,
+    val bytes: Long,
+    val totalBytes: Long,
+    val speedBps: Long,
+    val index: Int,
+    val total: Int,
+)
 
 class SnagViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -60,6 +85,9 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
 
     var state by mutableStateOf<ResolveState>(ResolveState.Idle)
         private set
+
+    private var resolveJob: Job? = null
+    private var lastStableState: ResolveState = ResolveState.Idle
 
     var quality by mutableStateOf(prefs.quality)
         private set
@@ -91,6 +119,14 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
 
     val history = mutableStateListOf<HistoryEntry>()
 
+    /** Non-null while the shared download queue is queued or running. */
+    var activeDownload by mutableStateOf<ActiveDownload?>(null)
+        private set
+
+    private val queueWork =
+        WorkManager.getInstance(app).getWorkInfosForUniqueWorkLiveData(DOWNLOAD_QUEUE_NAME)
+    private val queueObserver = Observer<List<WorkInfo>> { infos -> updateActiveDownload(infos) }
+
     /** Saved profiles, newest first. Tapping one reloads its current public videos. */
     val profileBookmarks = mutableStateListOf<ProfileBookmark>()
 
@@ -104,10 +140,56 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
     init {
         refreshHistory()
         refreshProfileBookmarks()
+        queueWork.observeForever(queueObserver)
         prefs.observeScrollMode { enabled -> scrollModeEnabled = enabled }
         if (tiktokSignedIn) {
             viewModelScope.launch { validateTikTokSession() }
         }
+    }
+
+    override fun onCleared() {
+        queueWork.removeObserver(queueObserver)
+        super.onCleared()
+    }
+
+    private fun updateActiveDownload(infos: List<WorkInfo>) {
+        val active = infos.filter {
+            it.state == WorkInfo.State.ENQUEUED ||
+                it.state == WorkInfo.State.RUNNING ||
+                it.state == WorkInfo.State.BLOCKED
+        }
+        if (active.isEmpty()) {
+            val wasActive = activeDownload != null
+            activeDownload = null
+            if (wasActive) refreshHistory()
+            return
+        }
+
+        val running = active.firstOrNull { it.state == WorkInfo.State.RUNNING }
+        if (running == null) {
+            activeDownload = ActiveDownload(
+                percent = 0,
+                indeterminate = true,
+                bytes = 0L,
+                totalBytes = 0L,
+                speedBps = 0L,
+                index = 0,
+                total = 1,
+            )
+            return
+        }
+
+        val progress = running.progress
+        val percent = progress.getInt(DOWNLOAD_PROGRESS, -1)
+        activeDownload = ActiveDownload(
+            percent = percent.coerceIn(0, 100),
+            indeterminate = percent < 0 || progress.getBoolean(DOWNLOAD_INDETERMINATE, false),
+            bytes = progress.getLong(DOWNLOAD_BYTES, 0L),
+            totalBytes = progress.getLong(DOWNLOAD_TOTAL_BYTES, 0L),
+            speedBps = progress.getLong(DOWNLOAD_SPEED, 0L),
+            index = progress.getInt(DOWNLOAD_INDEX, 0),
+            total = progress.getInt(DOWNLOAD_TOTAL, 1).coerceAtLeast(1),
+        )
     }
 
     fun selectTab(tab: Tab) {
@@ -185,9 +267,18 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearInput() {
+        resolveJob?.cancel()
+        resolveJob = null
         input = ""
         state = ResolveState.Idle
+        lastStableState = ResolveState.Idle
         selected.clear()
+    }
+
+    fun cancelResolve() {
+        resolveJob?.cancel()
+        resolveJob = null
+        state = lastStableState
     }
 
     fun resolve(text: String = input) {
@@ -206,6 +297,16 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
         resolve(current.url, autoSave = false, openProfile = true, forceFullProfile = true)
     }
 
+    private fun loadingLabel(value: String): String {
+        val url = UrlParser.firstUrl(value) ?: return "Reading link."
+        return when {
+            YouTubePlaylistUrl.isPlaylist(url) -> "Loading YouTube playlist."
+            UrlParser.classify(url) == SourcePlatform.YOUTUBE -> "Reading YouTube video."
+            UrlParser.classify(url) == SourcePlatform.INSTAGRAM -> "Reading Instagram."
+            else -> "Reading link."
+        }
+    }
+
     private fun resolve(
         text: String,
         autoSave: Boolean,
@@ -215,11 +316,18 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
         val value = text.trim()
         if (value.isEmpty() || state is ResolveState.Loading) return
 
-        state = ResolveState.Loading
+        lastStableState = state
+        state = ResolveState.Loading(loadingLabel(value))
         selected.clear()
-        viewModelScope.launch {
-            state = try {
-                when (val outcome = repository.resolve(value, forceFullProfile)) {
+        resolveJob = viewModelScope.launch {
+            val result = try {
+                when (val outcome = repository.resolve(value, forceFullProfile) { progress ->
+                    viewModelScope.launch {
+                        if (state is ResolveState.Loading) {
+                            state = ResolveState.Loading(progress)
+                        }
+                    }
+                }) {
                     is Outcome.Success -> {
                         if (autoSave) queueBestAvailable(outcome.bundle)
                         ResolveState.Media(outcome.bundle, outcome.failures)
@@ -236,12 +344,17 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     is Outcome.Failure -> ResolveState.Failed(outcome.message, outcome.failures)
                 }
+            } catch (c: CancellationException) {
+                throw c
             } catch (t: Throwable) {
                 ResolveState.Failed(
                     t.message ?: "Couldn't read link",
                     emptyList(),
                 )
             }
+            state = result
+            lastStableState = result
+            resolveJob = null
         }
     }
 

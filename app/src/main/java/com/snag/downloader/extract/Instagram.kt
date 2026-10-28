@@ -11,6 +11,7 @@ import com.snag.downloader.core.SourcePlatform
 import com.snag.downloader.core.Strategy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.net.URI
 
 /**
@@ -45,11 +46,21 @@ internal class InstagramEmbedStrategy : Strategy {
         val canonical = "https://www.instagram.com/$kind/$code/"
         val embed = "https://www.instagram.com/$kind/$code/embed/captioned/"
 
-        val page = Http.get(
-            url = embed,
-            userAgent = Http.UA_DESKTOP,
-            headers = mapOf("Referer" to canonical),
-        )
+        val page = try {
+            Http.get(
+                url = embed,
+                userAgent = Http.UA_DESKTOP,
+                headers = mapOf("Referer" to canonical),
+            )
+        } catch (e: IOException) {
+            val code = httpCode(e.message)
+            throw when {
+                code == 429 -> ExtractionException.Blocked(id, "rate limit")
+                code == 401 || code == 403 -> ExtractionException.Blocked(id, "login required")
+                code == 404 -> ExtractionException.NoMedia(id, "post unavailable")
+                else -> ExtractionException.Failed(id, e)
+            }
+        }
         val html = page.body
         val meta = MetaParser.parse(html)
 
@@ -58,14 +69,10 @@ internal class InstagramEmbedStrategy : Strategy {
         val username = usernameRegex.find(html)?.groupValues?.get(1)
 
         if (videoUrls.isEmpty() && imageUrls.isEmpty()) {
-            throw ExtractionException.NoMedia(
-                id,
-                if (html.contains("LoginAndSignupPage") || html.contains("loginForm")) {
-                    "embed returned a login wall"
-                } else {
-                    "embed has no media URLs"
-                },
-            )
+            if (html.contains("LoginAndSignupPage") || html.contains("loginForm")) {
+                throw ExtractionException.Blocked(id, "login wall")
+            }
+            throw ExtractionException.NoMedia(id, "embed has no media URLs")
         }
 
         val variants = if (videoUrls.isNotEmpty()) {
@@ -109,6 +116,9 @@ internal class InstagramEmbedStrategy : Strategy {
             decodeUrl(match.groupValues[1])
         }.toList()
     }
+
+    private fun httpCode(message: String?): Int? =
+        Regex("""HTTP (\d{3})""").find(message.orEmpty())?.groupValues?.get(1)?.toIntOrNull()
 
     private fun decodeUrl(raw: String): String? {
         val value = raw

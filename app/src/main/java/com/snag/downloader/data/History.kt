@@ -209,14 +209,19 @@ class MediaRepository(
 
     val historyStore: HistoryStore get() = history
 
-    suspend fun resolve(text: String, forceFullProfile: Boolean = false): Outcome {
+    suspend fun resolve(
+        text: String,
+        forceFullProfile: Boolean = false,
+        onProgress: (String) -> Unit = {},
+    ): Outcome {
         val urls = UrlParser.allUrls(text)
         val url = urls.firstOrNull()
             ?: return Outcome.Failure(null, "No link found")
 
         if (urls.size > 1) {
             val items = mutableListOf<MediaBundle>()
-            for (candidate in urls.take(20)) {
+            for ((index, candidate) in urls.take(20).withIndex()) {
+                onProgress("Reading batch link ${index + 1}.")
                 val bundle = runCatching { registry.resolve(candidate).bundle }.getOrNull()
                 if (bundle != null) items.add(bundle)
             }
@@ -241,7 +246,9 @@ class MediaRepository(
         if (YouTubePlaylistUrl.isPlaylist(url)) {
             val started = System.currentTimeMillis()
             val playlist = runCatching {
-                withTimeoutOrNull(180_000) { youtubePlaylists.fetch(url) }
+                withTimeoutOrNull(180_000) {
+                    youtubePlaylists.fetch(url, onProgress)
+                }
             }.getOrNull()
             if (playlist != null) {
                 return Outcome.Profile(
@@ -333,10 +340,25 @@ class MediaRepository(
         val bundle = resolution.bundle
             ?: return Outcome.Failure(
                 url,
-                "No media found",
+                failureMessage(url, resolution.failures),
                 resolution.failures,
             )
 
         return Outcome.Success(bundle, resolution.failures)
+    }
+
+    private fun failureMessage(url: String, failures: List<StrategyFailure>): String {
+        if (UrlParser.classify(url) != SourcePlatform.INSTAGRAM) return "No media found"
+        val detail = failures.joinToString(" ") { it.message }.lowercase()
+        return when {
+            "429" in detail || "rate limit" in detail ->
+                "Instagram is rate-limiting this request. Wait a minute, then try again."
+            "login" in detail || "401" in detail || "403" in detail ->
+                "Instagram wants a login for this post. It may be private or age-restricted."
+            "404" in detail || "unavailable" in detail ->
+                "This Instagram post is unavailable or was removed."
+            else ->
+                "Instagram didn't return media for this link. Open the post in the Instagram app to confirm it is public."
+        }
     }
 }

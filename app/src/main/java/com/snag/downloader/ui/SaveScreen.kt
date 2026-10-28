@@ -188,7 +188,7 @@ fun SaveScreen(vm: SnagViewModel) {
                 ) { state ->
                     when (state) {
                         ResolveState.Idle -> Spacer(Modifier.height(0.dp))
-                        ResolveState.Loading -> ResolvingCard()
+                        is ResolveState.Loading -> ResolvingCard(state.message, vm::cancelResolve)
                         is ResolveState.Failed -> FailureCard(
                             state = state,
                             onRetry = { vm.resolve() },
@@ -394,7 +394,7 @@ private fun Fact(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ResolvingCard() {
+private fun ResolvingCard(message: String, onCancel: () -> Unit) {
     SnagCard(Modifier.fillMaxWidth()) {
         val colors = snagColors()
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -404,7 +404,8 @@ private fun ResolvingCard() {
                 color = colors.accent,
             )
             Spacer(Modifier.width(14.dp))
-            Text("Reading link…", style = MaterialTheme.typography.titleSmall)
+            Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            SnagTextButton(text = "Cancel", onClick = onCancel)
         }
     }
 }

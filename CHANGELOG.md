@@ -16,6 +16,24 @@ Snag follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-28
+
+### Added
+
+- **In-app download bar** above the navigation bar. It shows the current file in a batch, overall percentage, transferred size, total size when known, and live transfer speed (for example `2.4 MB/s`). It remains visible across tabs while the shared queue is active.
+- **Playlist progress and cancel** - long YouTube playlist resolution now shows `Resolving playlist 5/10` with a **Cancel** action.
+
+### Changed
+
+- YouTube playlist loads resolve the first 10 entries with up to three concurrent yt-dlp lookups instead of resolving 20 sequentially.
+- YouTube video metadata is cached for 10 minutes, so retries and repeat actions avoid a second yt-dlp lookup.
+- Release builds are architecture-specific. The published phone APK is `arm64-v8a` and is about 100 MB instead of the previous 245 MB universal APK.
+- Loading labels now describe the current work (`Reading YouTube video`, `Loading YouTube playlist`, `Reading Instagram`, or the batch item being read).
+
+### Fixed
+
+- Instagram rate limits, login walls, and removed posts now produce clear retry guidance instead of a generic "No media found" failure.
+
 ## [0.8.0] - 2026-10-28
 
 ### Added

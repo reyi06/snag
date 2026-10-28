@@ -45,13 +45,18 @@ import java.util.UUID
 
 private const val KEY_JOBS = "jobs"
 private const val KEY_QUEUE_FILE = "queue_file"
-private const val KEY_PROGRESS = "progress"
-private const val KEY_INDEX = "index"
+const val DOWNLOAD_PROGRESS = "progress"
+const val DOWNLOAD_INDEX = "index"
+const val DOWNLOAD_TOTAL = "total"
+const val DOWNLOAD_BYTES = "bytes"
+const val DOWNLOAD_TOTAL_BYTES = "total_bytes"
+const val DOWNLOAD_SPEED = "speed_bps"
+const val DOWNLOAD_INDETERMINATE = "indeterminate"
 
 private const val CHANNEL = "snag_downloads"
 private const val NOTIFICATION_ID = 42
 private const val DONE_NOTIFICATION_ID = 43
-private const val QUEUE = "snag-download-queue"
+const val DOWNLOAD_QUEUE_NAME = "snag-download-queue"
 
 /**
  * One file in a batch. Immutable and JSON-encodable so the whole queue survives
@@ -148,7 +153,14 @@ class DownloadWorker(
                 runCatching {
                     setForeground(foreground(index, jobs.size, job.fileName, 0))
                 }
-                setProgress(workDataOf(KEY_INDEX to index, KEY_PROGRESS to 0))
+                setProgress(
+                    workDataOf(
+                        DOWNLOAD_INDEX to index,
+                        DOWNLOAD_TOTAL to jobs.size,
+                        DOWNLOAD_PROGRESS to 0,
+                        DOWNLOAD_INDETERMINATE to true,
+                    )
+                )
 
                 try {
                     transfer(job, index, jobs.size)
@@ -328,6 +340,9 @@ class DownloadWorker(
                     body.byteStream().use { source ->
                         val buffer = ByteArray(64 * 1024)
                         var lastTick = 0L
+                        var lastSampleAt = System.currentTimeMillis()
+                        var lastSampleBytes = 0L
+                        var speedBps = 0.0
                         while (true) {
                             if (isStopped) throw CancellationException("Stopped by the user")
                             val read = source.read(buffer)
@@ -337,12 +352,38 @@ class DownloadWorker(
 
                             val now = System.currentTimeMillis()
                             if (now - lastTick >= 250L) {
+                                val elapsed = now - lastSampleAt
+                                if (elapsed > 0L) {
+                                    val sample = (written - lastSampleBytes) * 1000.0 / elapsed
+                                    speedBps =
+                                        if (speedBps <= 0.0) sample
+                                        else speedBps * 0.7 + sample * 0.3
+                                    lastSampleAt = now
+                                    lastSampleBytes = written
+                                }
                                 lastTick = now
                                 val itemFraction =
                                     if (length > 0) written.toFloat() / length else 0f
-                                publishProgress(index, total, itemFraction, job.fileName)
+                                publishProgress(
+                                    index = index,
+                                    total = total,
+                                    itemFraction = itemFraction,
+                                    fileName = job.fileName,
+                                    bytes = written,
+                                    totalBytes = length,
+                                    speedBps = speedBps.toLong(),
+                                )
                             }
                         }
+                        publishProgress(
+                            index = index,
+                            total = total,
+                            itemFraction = if (length > 0) 1f else 0f,
+                            fileName = job.fileName,
+                            bytes = written,
+                            totalBytes = length,
+                            speedBps = speedBps.toLong(),
+                        )
                     }
                 }
             }
@@ -434,13 +475,26 @@ class DownloadWorker(
         }.getOrDefault(emptyList())
     }
 
-    private suspend fun publishProgress(index: Int, total: Int, itemFraction: Float, fileName: String) {
+    private suspend fun publishProgress(
+        index: Int,
+        total: Int,
+        itemFraction: Float,
+        fileName: String,
+        bytes: Long,
+        totalBytes: Long,
+        speedBps: Long,
+    ) {
         val fraction = itemFraction.coerceIn(0f, 1f)
         val overall = (((index + fraction) / total) * 100).toInt().coerceIn(0, 100)
         setProgress(
             workDataOf(
-                KEY_INDEX to index,
-                KEY_PROGRESS to overall,
+                DOWNLOAD_INDEX to index,
+                DOWNLOAD_TOTAL to total,
+                DOWNLOAD_PROGRESS to overall,
+                DOWNLOAD_BYTES to bytes,
+                DOWNLOAD_TOTAL_BYTES to totalBytes,
+                DOWNLOAD_SPEED to speedBps,
+                DOWNLOAD_INDETERMINATE to (totalBytes <= 0L),
             )
         )
         runCatching {
@@ -577,7 +631,7 @@ object DownloadScheduler {
 
         try {
             WorkManager.getInstance(context)
-                .enqueueUniqueWork(QUEUE, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+                .enqueueUniqueWork(DOWNLOAD_QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
         } catch (t: Throwable) {
             queueFile.delete()
             throw t

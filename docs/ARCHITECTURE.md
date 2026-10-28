@@ -2,7 +2,7 @@
 
 Snag is a single-module Android app built with Kotlin and Jetpack Compose. All extraction and downloads happen on the device; there is no Snag backend, account system, analytics, or billing.
 
-Current release: **0.8.0** (`versionCode` 12).
+Current release: **0.8.1** (`versionCode` 13).
 
 ## Layers
 
@@ -41,7 +41,9 @@ The WebView verification path and the optional TikWM fallback remain last-resort
 
 ## YouTube
 
-YouTube uses the embedded `youtubedl-android` runtime, which bundles yt-dlp, Python, and FFmpeg. `YouTubeExtractor` resolves a single video and exposes progressive video variants plus the best audio-only format. `YouTubePlaylistExtractor` reads the playlist page for video IDs, resolves up to 20 entries through yt-dlp, and returns a `ProfileBundle` so playlists use the same batch sheet, queue, history, and progress notification as other platforms. The runtime is initialized lazily on the first YouTube request.
+YouTube uses the embedded `youtubedl-android` runtime, which bundles yt-dlp, Python, and FFmpeg. `YouTubeExtractor` resolves a single video and exposes progressive video variants plus the best audio-only format. `YouTubePlaylistExtractor` reads the playlist page for video IDs, resolves the first 10 entries through yt-dlp with up to three concurrent lookups, and returns a `ProfileBundle` so playlists use the same batch sheet, queue, history, and progress notification as other platforms. Resolved video metadata is cached in memory for 10 minutes. The runtime is initialized lazily on the first YouTube request.
+
+Long playlist resolution reports progress to `SnagViewModel` and can be cancelled; a cancelled load restores the previous result instead of showing a failure.
 
 `TikTokIdentityCache` stores the stable `secUid` plus public profile metadata per handle
 for 30 days. A cache hit lets the extractor call `/api/creator/item_list/` immediately,
@@ -68,6 +70,8 @@ There is no AccessibilityService, automatic scrolling, share-sheet automation, o
 `DownloadScheduler` stores the batch JSON in app-private storage and gives WorkManager only a queue filename. This avoids WorkManager's 10 KB input-data limit for long CDN URLs.
 
 `DownloadWorker` streams files sequentially into `MediaStore.Downloads/Snag`, retries transient failures, tries an alternate CDN URL, and updates history and the progress notification. Photo carousels are saved as individual images.
+
+The worker publishes work progress with the current batch index, overall percentage, transferred bytes, total bytes when the server reports `Content-Length`, and a smoothed transfer speed. `SnagViewModel` observes the unique WorkManager queue and renders the in-app download bar above the navigation bar on every tab. When the queue empties, history is refreshed once so completed rows appear without waiting for a screen change.
 
 ## Local data
 

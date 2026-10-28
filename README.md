@@ -2,7 +2,7 @@
 
 Snag is an Android media downloader for public social posts. It resolves links on-device, shows the available quality, and saves files to `Downloads/Snag` without ads, accounts, a backend, or an API key.
 
-Current release: **0.8.0**
+Current release: **0.8.1**
 
 ## What it does
 
@@ -11,14 +11,15 @@ Current release: **0.8.0**
 - Loads public TikTok profiles and creator batches without signing in. Profiles use TikTok's creator embed and creator item-list API.
 - Saves Instagram reels, video posts, and photos, including carousel images; Facebook post links remain supported.
 - Accepts multiple pasted links as one batch and uses the same queue, history, progress, and file manager.
+- Shows an in-app download bar with the current file, percentage, size, and transfer speed while the shared queue runs.
 - Keeps a local library and download history.
 - Provides a **Scroll mode** floating crown for saving a TikTok link while browsing.
 
 ## Install
 
-1. Download `Snag-0.8.0.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
+1. Download `Snag-0.8.1.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
 2. Allow installs from unknown sources for the browser or file manager you use.
-3. Android 10 or newer is required.
+3. Android 10 or newer on a 64-bit ARM device is required. The published APK is `arm64-v8a`, which covers most Android phones.
 
 The APK is signed with the Snag release key. The signing key is not stored in this repository.
 
@@ -31,9 +32,9 @@ Because Snag is installed from a signed APK rather than Google Play, Android or 
 - [Privacy policy](PRIVACY.md)
 - [Disclaimer and legal notice](DISCLAIMER.md)
 - [Security policy](SECURITY.md)
-- [Proprietary license](LICENSE)
+- [GPL-3.0 license](LICENSE)
 
-Snag is not affiliated with TikTok, ByteDance, Instagram, Meta, or Facebook. Use it only for media you are allowed to save, and follow the source platform's terms. Snag does not grant any rights to downloaded content.
+Snag is not affiliated with TikTok, ByteDance, YouTube, Google, Instagram, Meta, or Facebook. Use it only for media you are allowed to save, and follow the source platform's terms. Snag does not grant any rights to downloaded content.
 
 ## Scroll mode
 
@@ -69,7 +70,7 @@ Requirements:
 .\gradlew.bat assembleDebug
 ```
 
-For a release build, create your own signing setup and sign `app/build/outputs/apk/release/app-release-unsigned.apk` with `apksigner`. The project's release key and password are intentionally kept outside the repository.
+For a release build, create your own signing setup and sign `app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk` with `apksigner`. The project's release key and password are intentionally kept outside the repository.
 
 ## Project layout
 
@@ -82,7 +83,7 @@ For a release build, create your own signing setup and sign `app/build/outputs/a
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.8.0.md](docs/releases/0.8.0.md).
+See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.8.1.md](docs/releases/0.8.1.md).
 
 ## Credits
 
