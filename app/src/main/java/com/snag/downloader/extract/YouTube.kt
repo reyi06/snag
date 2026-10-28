@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap
 internal object YouTubeClient {
 
     private val initMutex = Mutex()
+    private val updateMutex = Mutex()
     private val infoCache = ConcurrentHashMap<String, CachedInfo>()
 
     @Volatile
@@ -65,12 +66,27 @@ internal object YouTubeClient {
         val prefs = context.getSharedPreferences("snag_ytdlp", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         if (now - prefs.getLong("last_check", 0L) < UPDATE_INTERVAL_MS) return
-        prefs.edit().putLong("last_check", now).apply()
-        runCatching {
+        if (now - prefs.getLong("last_attempt", 0L) < RETRY_INTERVAL_MS) return
+        prefs.edit().putLong("last_attempt", now).apply()
+        val updated = runCatching {
             YoutubeDL.getInstance().updateYoutubeDL(
                 context.applicationContext,
                 YoutubeDL.UpdateChannel.STABLE,
             )
+        }.isSuccess
+        if (updated) prefs.edit().putLong("last_check", now).apply()
+    }
+
+    /** Force a yt-dlp refresh and let an extractor retry immediately. */
+    suspend fun forceRefresh(context: Context): Boolean = withContext(Dispatchers.IO) {
+        if (!initialized) initialize(context)
+        updateMutex.withLock {
+            runCatching {
+                YoutubeDL.getInstance().updateYoutubeDL(
+                    context.applicationContext,
+                    YoutubeDL.UpdateChannel.STABLE,
+                )
+            }.isSuccess
         }
     }
 
@@ -90,6 +106,7 @@ internal object YouTubeClient {
 
     private const val CACHE_TTL_MS = 10 * 60 * 1000L
     private const val UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000L
+    private const val RETRY_INTERVAL_MS = 10 * 60 * 1000L
 }
 
 /** Single YouTube video. Video and audio are separate formats from yt-dlp. */
@@ -253,7 +270,6 @@ internal object YouTubeMedia {
         val formats = info.formats.orEmpty()
         val videos = formats.filter { format ->
             format.vcodec?.let { it != "none" } == true &&
-                format.acodec?.let { it != "none" } == true &&
                 !format.url.isNullOrBlank()
         }
         val audio = formats
@@ -263,15 +279,28 @@ internal object YouTubeMedia {
                     !format.url.isNullOrBlank()
             }
             .maxByOrNull { it.abr.takeIf { value -> value > 0 } ?: it.tbr }
+        val audioFormatId = audio?.formatId?.takeIf { it.isNotBlank() }
 
         val variants = LinkedHashMap<String, MediaVariant>()
         for (format in videos.sortedByDescending { it.height }) {
             val url = format.url ?: continue
+            val hasAudio = format.acodec
+                ?.takeIf { it.isNotBlank() && it != "none" } != null
+            val formatId = format.formatId?.takeIf { it.isNotBlank() }
+            val selector = if (!hasAudio && formatId != null && audioFormatId != null) {
+                "$formatId+$audioFormatId"
+            } else {
+                null
+            }
+            // Adaptive video without an audio stream is only useful when we can
+            // hand the pair to yt-dlp for merging.
+            if (!hasAudio && selector == null) continue
             variants.putIfAbsent(
-                url,
+                if (selector != null) "format:$selector" else url,
                 MediaVariant(
                     kind = MediaKind.VIDEO,
                     url = url,
+                    downloadFormatId = selector,
                     width = format.width,
                     height = format.height,
                     label = format.formatNote ?: "${format.height}p",

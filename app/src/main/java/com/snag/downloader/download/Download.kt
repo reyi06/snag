@@ -31,9 +31,13 @@ import com.snag.downloader.core.SourcePlatform
 import com.snag.downloader.core.UrlParser
 import com.snag.downloader.data.DownloadStatus
 import com.snag.downloader.extract.TikTokFallback
+import com.snag.downloader.extract.YouTubeClient
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import okhttp3.CookieJar
 import okhttp3.Request
@@ -52,6 +56,7 @@ const val DOWNLOAD_BYTES = "bytes"
 const val DOWNLOAD_TOTAL_BYTES = "total_bytes"
 const val DOWNLOAD_SPEED = "speed_bps"
 const val DOWNLOAD_INDETERMINATE = "indeterminate"
+const val DOWNLOAD_MUX = "mux"
 
 private const val CHANNEL = "snag_downloads"
 private const val NOTIFICATION_ID = 42
@@ -73,6 +78,8 @@ data class DownloadJob(
     val historyId: Long,
     val fallbackUrl: String? = null,
     val sourceUrl: String? = null,
+    /** When set, yt-dlp downloads this format pair and merges it with FFmpeg. */
+    val ytDlpFormat: String? = null,
 ) {
     fun encode(): JSONObject = JSONObject().apply {
         put("url", url)
@@ -81,6 +88,7 @@ data class DownloadJob(
         put("historyId", historyId)
         put("fallbackUrl", fallbackUrl.orEmpty())
         put("sourceUrl", sourceUrl.orEmpty())
+        put("ytDlpFormat", ytDlpFormat.orEmpty())
     }
 
     companion object {
@@ -93,6 +101,7 @@ data class DownloadJob(
                 historyId = json.getLong("historyId"),
                 fallbackUrl = json.optString("fallbackUrl").takeIf { it.isNotBlank() },
                 sourceUrl = json.optString("sourceUrl").takeIf { it.isNotBlank() },
+                ytDlpFormat = json.optString("ytDlpFormat").takeIf { it.isNotBlank() },
             )
         }.getOrNull()
     }
@@ -208,6 +217,11 @@ class DownloadWorker(
      * Each candidate gets a small transient-error retry before moving on.
      */
     private suspend fun transfer(job: DownloadJob, index: Int, total: Int) {
+        if (job.ytDlpFormat != null) {
+            transferWithYtDlp(job, index, total)
+            return
+        }
+
         val app = applicationContext as SnagApp
         val fallback = job.fallbackUrl?.takeIf { it != job.url }
         val candidates = buildList {
@@ -401,6 +415,114 @@ class DownloadWorker(
         } catch (t: Throwable) {
             runCatching { resolver.delete(target, null, null) }
             throw t
+        }
+    }
+
+    /**
+     * Downloads an adaptive video+audio pair with yt-dlp and lets its bundled
+     * FFmpeg merge them before importing the result into MediaStore.
+     */
+    private suspend fun transferWithYtDlp(job: DownloadJob, index: Int, total: Int) {
+        val resolver = applicationContext.contentResolver
+        val tempDir = File(applicationContext.cacheDir, "snag-ytdlp-${UUID.randomUUID()}")
+        val pending = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, job.fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, job.mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/Snag")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, pending)
+            ?: throw IOException("Could not create the file in Downloads")
+
+        try {
+            // Remove orphaned merge directories left by an interrupted build/run.
+            applicationContext.cacheDir
+                .listFiles { file -> file.isDirectory && file.name.startsWith("snag-ytdlp-") }
+                ?.forEach { old -> if (old != tempDir) old.deleteRecursively() }
+            tempDir.mkdirs()
+            YouTubeClient.initialize(applicationContext)
+            val request = YoutubeDLRequest(job.sourceUrl ?: job.url).apply {
+                addOption("--no-warnings")
+                addOption("--no-playlist")
+                addOption("--no-mtime")
+                addOption("--merge-output-format", "mp4")
+                addOption("-f", job.ytDlpFormat!!)
+                addOption("-o", File(tempDir, "%(id)s.%(ext)s").absolutePath)
+            }
+            val response = withContext(Dispatchers.IO) {
+                YoutubeDL.getInstance().execute(
+                    request,
+                    "snag-${job.historyId}",
+                ) { progress, _, _ ->
+                    runBlocking { publishMuxProgress(index, total, progress) }
+                }
+            }
+            if (response.exitCode != 0) {
+                throw IOException(response.err.trim().take(200).ifBlank { "yt-dlp failed" })
+            }
+
+            val merged = tempDir.listFiles()
+                ?.filter { it.isFile && it.length() > 0L }
+                ?.maxByOrNull { it.length() }
+                ?: throw IOException("yt-dlp produced no merged file")
+            publishMuxProgress(index, total, 1f)
+
+            val output = resolver.openOutputStream(target)
+                ?: throw IOException("Could not open the file for writing")
+            var written = 0L
+            output.use { sink ->
+                merged.inputStream().use { source ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        if (isStopped) throw CancellationException("Stopped by the user")
+                        val read = source.read(buffer)
+                        if (read == -1) break
+                        sink.write(buffer, 0, read)
+                        written += read
+                    }
+                }
+            }
+            if (written <= 0L) throw IOException("Merged file was empty")
+
+            val done = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            resolver.update(target, done, null, null)
+            (applicationContext as SnagApp).history.update(
+                job.historyId,
+                DownloadStatus.DONE,
+                target.toString(),
+                written,
+            )
+        } catch (t: Throwable) {
+            runCatching { resolver.delete(target, null, null) }
+            throw t
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    private suspend fun publishMuxProgress(index: Int, total: Int, fraction: Float) {
+        val overall = (((index + fraction.coerceIn(0f, 1f)) / total) * 100)
+            .toInt()
+            .coerceIn(0, 100)
+        setProgress(
+            workDataOf(
+                DOWNLOAD_INDEX to index,
+                DOWNLOAD_TOTAL to total,
+                DOWNLOAD_PROGRESS to overall,
+                DOWNLOAD_INDETERMINATE to false,
+                DOWNLOAD_MUX to true,
+            )
+        )
+        runCatching {
+            NotificationManagerCompat.from(applicationContext).notify(
+                NOTIFICATION_ID,
+                notification(
+                    title = "Downloading ${index + 1}/$total",
+                    text = if (overall >= 100) "Merging video + audio" else "Downloading video + audio",
+                    progress = overall,
+                    indeterminate = false,
+                ),
+            )
         }
     }
 

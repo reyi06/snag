@@ -2,7 +2,7 @@
 
 Snag is a single-module Android app built with Kotlin and Jetpack Compose. All extraction and downloads happen on the device; there is no Snag backend, account system, analytics, or billing.
 
-Current release: **0.8.2** (`versionCode` 14).
+Current release: **0.8.3** (`versionCode` 15).
 
 ## Layers
 
@@ -41,7 +41,7 @@ The WebView verification path and the optional TikWM fallback remain last-resort
 
 ## YouTube
 
-YouTube uses the embedded `youtubedl-android` runtime, which bundles yt-dlp, Python, and FFmpeg. `YouTubeExtractor` resolves a single video and exposes progressive video variants plus the best audio-only format. `YouTubePlaylistExtractor` reads the playlist page for video IDs, resolves the first 10 entries through yt-dlp with up to three concurrent lookups, and returns a `ProfileBundle` so playlists use the same batch sheet, queue, history, and progress notification as other platforms. Resolved video metadata is cached in memory for 10 minutes. The runtime is initialized lazily on the first YouTube request.
+YouTube uses the embedded `youtubedl-android` runtime, which bundles yt-dlp, Python, and FFmpeg. `YouTubeExtractor` resolves a single video and exposes progressive and adaptive video variants plus the best audio-only format. Adaptive variants carry a yt-dlp selector such as `401+140`; the download worker hands that pair to yt-dlp and lets its bundled FFmpeg merge the result, so 1080p, 1440p, and 2160p sources are available instead of only progressive 360p/720p streams. `YouTubePlaylistExtractor` reads the playlist page for video IDs, resolves the first 10 entries through yt-dlp with up to three concurrent lookups, and returns a `ProfileBundle` so playlists use the same batch sheet, queue, history, and progress notification as other platforms. Resolved video metadata is cached in memory for 10 minutes. The runtime is initialized lazily on the first YouTube request.
 
 Long playlist resolution reports progress to `SnagViewModel` and can be cancelled; a cancelled load restores the previous result instead of showing a failure.
 
@@ -82,7 +82,7 @@ There is no AccessibilityService, automatic scrolling, share-sheet automation, o
 
 `DownloadWorker` streams files sequentially into `MediaStore.Downloads/Snag`, retries transient failures, tries an alternate CDN URL, and updates history and the progress notification. Photo carousels are saved as individual images.
 
-The worker publishes work progress with the current batch index, overall percentage, transferred bytes, total bytes when the server reports `Content-Length`, and a smoothed transfer speed. `SnagViewModel` observes the unique WorkManager queue and renders the in-app download bar above the navigation bar on every tab. When the queue empties, history is refreshed once so completed rows appear without waiting for a screen change.
+Direct downloads publish the current batch index, overall percentage, transferred bytes, total bytes when the server reports `Content-Length`, and a smoothed transfer speed. Adaptive YouTube and Instagram downloads use `DownloadJob.ytDlpFormat`: yt-dlp pulls the chosen video and audio streams into the app cache, FFmpeg merges them, and the worker imports the merged file into MediaStore. Those jobs publish `Downloading video + audio` and `Merging video + audio` stages instead of a byte/speed readout. `SnagViewModel` observes the unique WorkManager queue and renders the in-app download bar above the navigation bar on every tab. When the queue empties, history is refreshed once so completed rows appear without waiting for a screen change.
 
 ## Local data
 

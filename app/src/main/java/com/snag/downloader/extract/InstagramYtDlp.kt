@@ -30,6 +30,22 @@ internal class InstagramYtDlpStrategy(private val context: Context) : Strategy {
     override val timeoutMs: Long = 120_000
 
     override suspend fun extract(url: String): MediaBundle = withContext(Dispatchers.IO) {
+        try {
+            fetch(url)
+        } catch (first: Throwable) {
+            // A stale yt-dlp is a common cause of Instagram login/rate-limit
+            // failures. Refresh once and give the extractor a second chance.
+            if (first !is ExtractionException.Blocked &&
+                first !is ExtractionException.NoMedia
+            ) {
+                throw first
+            }
+            if (!YouTubeClient.forceRefresh(context)) throw first
+            fetch(url)
+        }
+    }
+
+    private suspend fun fetch(url: String): MediaBundle {
         YouTubeClient.initialize(context)
 
         val request = YoutubeDLRequest(url).apply {
@@ -75,7 +91,7 @@ internal class InstagramYtDlpStrategy(private val context: Context) : Strategy {
             ?: root.optString("uploader_id").takeIf { it.isNotBlank() }
         val uploader = root.optString("uploader").takeIf { it.isNotBlank() }
 
-        MediaBundle(
+        return MediaBundle(
             id = root.optString("id").ifBlank { "instagram" },
             platform = SourcePlatform.INSTAGRAM,
             sourceUrl = root.optString("webpage_url").ifBlank { url },
@@ -105,15 +121,34 @@ internal class InstagramYtDlpStrategy(private val context: Context) : Strategy {
     ): List<MediaVariant> {
         val variants = LinkedHashMap<String, MediaVariant>()
         val formats = entry.optJSONArray("formats") ?: JSONArray()
+        val videoFormats = mutableListOf<JSONObject>()
+        val audioFormats = mutableListOf<JSONObject>()
         for (formatIndex in 0 until formats.length()) {
             val format = formats.optJSONObject(formatIndex) ?: continue
-            val videoCodec = format.optString("vcodec")
-            val audioCodec = format.optString("acodec")
-            if (videoCodec == "none" || audioCodec == "none") {
-                // Adaptive DASH video without audio cannot be saved as a playable MP4 here.
-                continue
+            if (format.optString("url").isBlank()) continue
+            if (format.optString("vcodec") == "none") {
+                audioFormats += format
+            } else {
+                videoFormats += format
             }
+        }
+        val audioFormatId = audioFormats
+            .maxByOrNull { it.optInt("abr").takeIf { value -> value > 0 } ?: it.optInt("tbr") }
+            ?.optString("format_id")
+            ?.takeIf { it.isNotBlank() }
+
+        for (format in videoFormats) {
             val mediaUrl = format.optString("url").takeIf { it.isNotBlank() } ?: continue
+            val audioCodec = format.optString("acodec")
+            val hasAudio = audioCodec.isNotBlank() && audioCodec != "none"
+            val formatId = format.optString("format_id").takeIf { it.isNotBlank() }
+            val selector = if (!hasAudio && formatId != null && audioFormatId != null) {
+                "$formatId+$audioFormatId"
+            } else {
+                null
+            }
+            // Adaptive video-only streams are kept when yt-dlp can merge them.
+            if (!hasAudio && selector == null) continue
             val height = format.optInt("height").takeIf { it > 0 }
                 ?: entry.optInt("height").takeIf { it > 0 }
             val label = when {
@@ -122,10 +157,11 @@ internal class InstagramYtDlpStrategy(private val context: Context) : Strategy {
                 else -> "source"
             }
             variants.putIfAbsent(
-                mediaUrl,
+                selector?.let { "format:$it" } ?: mediaUrl,
                 MediaVariant(
                     kind = MediaKind.VIDEO,
                     url = mediaUrl,
+                    downloadFormatId = selector,
                     width = format.optInt("width").takeIf { it > 0 }
                         ?: entry.optInt("width").coerceAtLeast(0),
                     height = height ?: 0,

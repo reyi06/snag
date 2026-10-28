@@ -102,6 +102,7 @@ internal object BackgroundCapture {
                     historyId = entry.id,
                     fallbackUrl = variant.playbackUrl,
                     sourceUrl = item.sourceUrl,
+                    ytDlpFormat = variant.downloadFormatId,
                 )
             },
         )

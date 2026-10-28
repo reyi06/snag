@@ -141,20 +141,24 @@ private fun ActiveDownloadBar(download: ActiveDownload) {
     val scheme = MaterialTheme.colorScheme
     val colors = snagColors()
     val fraction = (download.percent / 100f).coerceIn(0f, 1f)
-    val detail = buildString {
-        if (download.bytes > 0L) {
-            append(formatBytes(download.bytes))
-            if (download.totalBytes > 0L) {
-                append(" of ")
-                append(formatBytes(download.totalBytes))
+    val detail = if (download.muxing) {
+        if (download.percent >= 100) "Merging video + audio" else "Downloading video + audio"
+    } else {
+        buildString {
+            if (download.bytes > 0L) {
+                append(formatBytes(download.bytes))
+                if (download.totalBytes > 0L) {
+                    append(" of ")
+                    append(formatBytes(download.totalBytes))
+                }
+            } else {
+                append("Preparing file")
             }
-        } else {
-            append("Preparing file")
-        }
-        if (download.speedBps > 0L) {
-            append("  •  ")
-            append(formatBytes(download.speedBps))
-            append("/s")
+            if (download.speedBps > 0L) {
+                append("  •  ")
+                append(formatBytes(download.speedBps))
+                append("/s")
+            }
         }
     }
 

@@ -2,12 +2,12 @@
 
 Snag is an Android media downloader for public social posts. It resolves links on-device, shows the available quality, and saves files to `Downloads/Snag` without ads, accounts, a backend, or an API key.
 
-Current release: **0.8.2**
+Current release: **0.8.3**
 
 ## What it does
 
 - Saves public TikTok videos, photo carousels, and audio.
-- Saves YouTube videos, YouTube audio, and YouTube playlists through an embedded yt-dlp runtime.
+- Saves YouTube videos, YouTube audio, and YouTube playlists through an embedded yt-dlp runtime, including 1080p, 1440p, and 2160p adaptive streams merged with FFmpeg.
 - Loads public TikTok profiles and creator batches without signing in. Profiles use TikTok's creator embed and creator item-list API.
 - Saves Instagram reels, video posts, and photos, including carousel images; Facebook post links remain supported.
 - Refreshes the bundled yt-dlp binary at most once per day so extractor fixes reach existing installs.
@@ -18,7 +18,7 @@ Current release: **0.8.2**
 
 ## Install
 
-1. Download `Snag-0.8.2.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
+1. Download `Snag-0.8.3.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
 2. Allow installs from unknown sources for the browser or file manager you use.
 3. Android 10 or newer on a 64-bit ARM device is required. The published APK is `arm64-v8a`, which covers most Android phones.
 
@@ -84,7 +84,7 @@ For a release build, create your own signing setup and sign `app/build/outputs/a
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.8.2.md](docs/releases/0.8.2.md).
+See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.8.3.md](docs/releases/0.8.3.md).
 
 ## Credits
 

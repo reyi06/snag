@@ -31,6 +31,7 @@ import com.snag.downloader.data.TikTokSession
 import com.snag.downloader.download.DOWNLOAD_BYTES
 import com.snag.downloader.download.DOWNLOAD_INDEX
 import com.snag.downloader.download.DOWNLOAD_INDETERMINATE
+import com.snag.downloader.download.DOWNLOAD_MUX
 import com.snag.downloader.download.DOWNLOAD_PROGRESS
 import com.snag.downloader.download.DOWNLOAD_QUEUE_NAME
 import com.snag.downloader.download.DOWNLOAD_SPEED
@@ -67,6 +68,7 @@ data class ActiveDownload(
     val speedBps: Long,
     val index: Int,
     val total: Int,
+    val muxing: Boolean = false,
 )
 
 class SnagViewModel(application: Application) : AndroidViewModel(application) {
@@ -189,6 +191,7 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
             speedBps = progress.getLong(DOWNLOAD_SPEED, 0L),
             index = progress.getInt(DOWNLOAD_INDEX, 0),
             total = progress.getInt(DOWNLOAD_TOTAL, 1).coerceAtLeast(1),
+            muxing = progress.getBoolean(DOWNLOAD_MUX, false),
         )
     }
 
@@ -488,6 +491,7 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
                     historyId = entry.id,
                     fallbackUrl = variant.playbackUrl,
                     sourceUrl = bundle.sourceUrl,
+                    ytDlpFormat = variant.downloadFormatId,
                 )
             },
         )

@@ -16,6 +16,22 @@ Snag follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-10-28
+
+### Added
+
+- **Adaptive YouTube downloads** - video-only and audio-only streams are downloaded as a pair and merged with FFmpeg. YouTube videos now offer 1080p, 1440p, and 2160p when the source provides them, instead of being limited to progressive 360p/720p streams.
+- **Adaptive Instagram reels** - reels that expose only separate DASH video and audio streams are paired, downloaded with yt-dlp, and merged into one MP4.
+
+### Changed
+
+- Merged downloads show `Downloading video + audio` and then `Merging video + audio` in the in-app progress bar and notification.
+- The quality picker's `Highest` options now apply to the full adaptive format list.
+
+### Fixed
+
+- Instagram extraction refreshes yt-dlp once when a login/rate-limit or no-format failure suggests the bundled extractor is stale, then retries.
+
 ## [0.8.2] - 2026-10-28
 
 ### Added

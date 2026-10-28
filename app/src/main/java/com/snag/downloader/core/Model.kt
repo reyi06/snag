@@ -35,6 +35,8 @@ data class MediaVariant(
     val kind: MediaKind,
     val url: String,
     val playbackUrl: String? = null,
+    /** yt-dlp selector such as `137+140` when video and audio must be merged. */
+    val downloadFormatId: String? = null,
     val width: Int = 0,
     val height: Int = 0,
     val label: String? = null,
