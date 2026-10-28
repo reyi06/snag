@@ -25,7 +25,9 @@ import java.net.URLEncoder
  * is loaded in the in-app browser once; its settled rehydration payload supplies the
  * identity and `secUid`, and the WebView cookies are forwarded to the post API.
  */
-class TikTokProfileExtractor {
+class TikTokProfileExtractor(
+    private val identityCache: TikTokIdentityCache? = null,
+) {
 
     private val apiClient by lazy {
         Http.client.newBuilder()
@@ -34,13 +36,19 @@ class TikTokProfileExtractor {
             .build()
     }
 
+    private val embedClient by lazy {
+        Http.client.newBuilder()
+            .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+    }
+
     /**
      * Public profiles are read from TikTok's creator embed first. The embed exposes
      * the profile metadata and recent posts without a login; its first post embed
      * carries the stable `secUid`, which unlocks the creator item-list API.
      *
-     * This is the same no-cookie route used by `tt-dlp`. The older WebView route is
-     * kept only as a last-resort fallback for regions where the embed is gated.
+     * A cached identity lets later opens call the creator API immediately, even when
+     * one of the embeds is temporarily returning 503.
      */
     suspend fun fetch(url: String): ProfileBundle {
         val direct = runCatching { fetchDirect(url) }.getOrNull()
@@ -48,56 +56,160 @@ class TikTokProfileExtractor {
         return fetchViaWebView(url)
     }
 
-    suspend fun fetchDirect(url: String): ProfileBundle = withContext(Dispatchers.IO) {
+    suspend fun fetchDirect(
+        url: String,
+        forceFullProfile: Boolean = false,
+    ): ProfileBundle = withContext(Dispatchers.IO) {
         val handle = TikTokProfileUrl.handle(url)
             ?: throw ExtractionException.Unsupported(url)
         val profileUrl = "https://www.tiktok.com/@$handle"
-        val embed = loadEmbed("/embed/@$handle")
-        val user = embed.optJSONObject("userInfo")
-            ?: throw ExtractionException.NoMedia("profile", "creator embed has no user")
-        val code = user.optInt("code", 200)
-        if (code !in listOf(0, 200)) {
-            throw ExtractionException.Blocked(
-                "profile",
-                user.optString("message").ifBlank { "TikTok rejected the profile" },
+        val cached = identityCache?.get(handle)
+        var identity = cached
+        var apiTried = false
+
+        // A cached secUid skips the fragile embeds. This is the path that makes a
+        // retry fast when the creator embed or post embed is throttled.
+        if (cached?.secUid?.isNotBlank() == true) {
+            apiTried = true
+            val items = fetchCreatorItemsWithRetry(
+                cached.secUid,
+                profileUrl,
+                forceFullProfile,
             )
+            if (items.isNotEmpty()) {
+                return@withContext fullProfile(handle, cached, items, null)
+            }
         }
 
-        val recent = embed.optJSONArray("videoList")
-            ?.let { parseRecent(it, handle, profileUrl) }
-            .orEmpty()
-        val secUid = resolveSecUid(embed, handle, profileUrl)
-        val items = if (secUid.isNullOrBlank()) {
-            emptyList()
+        var embed: JSONObject? = null
+        var user: JSONObject? = null
+        var recent = emptyList<MediaBundle>()
+        val embedResult = runCatching { loadEmbed("/embed/@$handle") }
+        embed = embedResult.getOrNull()
+        if (embed != null) {
+            user = embed.optJSONObject("userInfo")
+            if (user != null && user.optInt("code", 200) !in listOf(0, 200)) {
+                throw ExtractionException.Blocked(
+                    "profile",
+                    user.optString("message").ifBlank { "TikTok rejected the profile" },
+                )
+            }
+            recent = embed.optJSONArray("videoList")
+                ?.let { parseRecent(it, handle, profileUrl) }
+                .orEmpty()
+            if (identity == null) {
+                identity = resolveIdentity(embed, handle)
+                identity?.let { identityCache?.put(it) }
+            } else if (apiTried) {
+                // A successful embed may have refreshed TikTok's anonymous session;
+                // allow one more API scan before accepting the recent-only list.
+                apiTried = false
+            }
+        } else if (identity == null) {
+            throw embedResult.exceptionOrNull()
+                ?: ExtractionException.NoMedia("profile", "creator embed was unavailable")
+        }
+
+        val secUid = identity?.secUid
+        val items = if (!apiTried && !secUid.isNullOrBlank()) {
+            fetchCreatorItemsWithRetry(secUid, profileUrl, forceFullProfile)
         } else {
-            runCatching { fetchCreatorItems(secUid, profileUrl) }.getOrDefault(emptyList())
-        }
-        val merged = items.ifEmpty { recent }
-        if (merged.isEmpty()) {
-            throw ExtractionException.NoMedia("profile", "profile has no public videos")
+            emptyList()
         }
 
-        val avatar = user.optString("avatarThumbUrl").ifBlank {
-            user.optString("avatarThumb")
+        if (items.isNotEmpty()) {
+            return@withContext fullProfile(handle, identity, items, user)
         }
-        ProfileBundle(
+        if (recent.isNotEmpty()) {
+            return@withContext partialProfile(handle, identity, user, recent)
+        }
+        throw ExtractionException.NoMedia("profile", "profile has no public videos")
+    }
+
+    private fun fullProfile(
+        fallbackHandle: String,
+        identity: TikTokIdentity?,
+        items: List<MediaBundle>,
+        user: JSONObject?,
+    ): ProfileBundle {
+        val actualHandle = user?.optString("uniqueId")
+            ?.takeIf { it.isNotBlank() }
+            ?: identity?.handle
+            ?: fallbackHandle
+        val avatar = identity?.avatarUrl
+            ?: user?.optString("avatarThumbUrl")?.takeIf { it.isNotBlank() }
+            ?: user?.optString("avatarThumb")?.takeIf { it.isNotBlank() }
+        val videoCount = identity?.videoCount?.takeIf { it > 0 }
+            ?: items.size.toLong()
+        val merged = TikTokIdentity(
+            handle = actualHandle,
+            secUid = identity?.secUid.orEmpty(),
+            userId = identity?.userId ?: user?.optString("id")?.takeIf { it.isNotBlank() },
+            nickname = identity?.nickname
+                ?: user?.optString("nickname")?.takeIf { it.isNotBlank() },
+            avatarUrl = avatar,
+            bio = identity?.bio
+                ?: user?.optString("signature")?.takeIf { it.isNotBlank() },
+            followerCount = identity?.followerCount?.takeIf { it > 0 }
+                ?: user?.optLong("followerCount", 0L) ?: 0L,
+            videoCount = videoCount,
+        )
+        if (merged.secUid.isNotBlank()) identityCache?.put(merged)
+        return ProfileBundle(
             platform = SourcePlatform.TIKTOK,
-            url = profileUrl,
-            handle = user.optString("uniqueId").ifBlank { handle },
-            nickname = user.optString("nickname").takeIf { it.isNotBlank() },
-            avatarUrl = avatar.takeIf { it.isNotBlank() },
-            bio = user.optString("signature").takeIf { it.isNotBlank() },
-            followerCount = user.optLong("followerCount", 0L),
-            videoCount = merged.size.toLong(),
-            items = merged,
-            provenance = if (items.isNotEmpty()) "creator-embed" else "creator-embed-recent",
-            note = if (items.isEmpty()) "Recent videos only." else null,
+            url = "https://www.tiktok.com/@$actualHandle",
+            handle = actualHandle,
+            nickname = merged.nickname,
+            avatarUrl = merged.avatarUrl,
+            bio = merged.bio,
+            followerCount = merged.followerCount,
+            videoCount = videoCount,
+            items = items,
+            provenance = "creator-embed",
         )
     }
 
-    private suspend fun loadEmbed(path: String): JSONObject {
+    private fun partialProfile(
+        fallbackHandle: String,
+        identity: TikTokIdentity?,
+        user: JSONObject?,
+        recent: List<MediaBundle>,
+    ): ProfileBundle {
+        val actualHandle = user?.optString("uniqueId")
+            ?.takeIf { it.isNotBlank() }
+            ?: identity?.handle
+            ?: fallbackHandle
+        val avatar = identity?.avatarUrl
+            ?: user?.optString("avatarThumbUrl")?.takeIf { it.isNotBlank() }
+            ?: user?.optString("avatarThumb")?.takeIf { it.isNotBlank() }
+        val knownCount = identity?.videoCount ?: 0L
+        if (identity != null) identityCache?.put(identity)
+        return ProfileBundle(
+            platform = SourcePlatform.TIKTOK,
+            url = "https://www.tiktok.com/@$actualHandle",
+            handle = actualHandle,
+            nickname = identity?.nickname
+                ?: user?.optString("nickname")?.takeIf { it.isNotBlank() },
+            avatarUrl = avatar,
+            bio = identity?.bio
+                ?: user?.optString("signature")?.takeIf { it.isNotBlank() },
+            followerCount = identity?.followerCount?.takeIf { it > 0 }
+                ?: user?.optLong("followerCount", 0L) ?: 0L,
+            videoCount = knownCount,
+            items = recent,
+            provenance = "creator-embed-recent",
+            isPartial = true,
+            note = "TikTok did not return the full profile. Showing recent posts only.",
+        )
+    }
+
+    private suspend fun loadEmbed(
+        path: String,
+        attempts: Int = 5,
+        initialDelayMs: Long = 350L,
+    ): JSONObject {
         var last: Throwable? = null
-        repeat(3) { attempt ->
+        repeat(attempts) { attempt ->
             try {
                 val page = Http.get(
                     url = "https://www.tiktok.com$path",
@@ -107,6 +219,7 @@ class TikTokProfileExtractor {
                         "Referer" to "https://www.tiktok.com/",
                         "Sec-Fetch-Site" to "same-origin",
                     ),
+                    client = embedClient,
                 )
                 if (TikTokParser.isWaf(page.body)) {
                     throw ExtractionException.Blocked("profile", "TikTok's bot check appeared")
@@ -115,12 +228,15 @@ class TikTokProfileExtractor {
                     ?: throw ExtractionException.NoMedia("profile", "creator embed state was missing")
                 val data = state.optJSONObject("source")?.optJSONObject("data")
                     ?: throw ExtractionException.NoMedia("profile", "creator embed data was missing")
-                val embed = data.optJSONObject(path) ?: data.optJSONObject("$path/")
+                return data.optJSONObject(path)
+                    ?: data.optJSONObject("$path/")
                     ?: throw ExtractionException.NoMedia("profile", "creator embed payload was missing")
-                return embed
             } catch (t: Throwable) {
                 last = t
-                if (attempt < 2) delay(700L * (attempt + 1))
+                if (attempt < attempts - 1) {
+                    val delayMs = (initialDelayMs * (1L shl attempt)).coerceAtMost(3_000L)
+                    delay(delayMs)
+                }
             }
         }
         throw last ?: ExtractionException.NoMedia("profile", "creator embed was unavailable")
@@ -137,11 +253,10 @@ class TikTokProfileExtractor {
         return runCatching { JSONObject(html.substring(start + 1, end)) }.getOrNull()
     }
 
-    private suspend fun resolveSecUid(
+    private suspend fun resolveIdentity(
         embed: JSONObject,
         handle: String,
-        profileUrl: String,
-    ): String? {
+    ): TikTokIdentity? {
         val ids = embed.optJSONArray("videoList")?.let { list ->
             (0 until list.length()).mapNotNull { index ->
                 list.optJSONObject(index)?.optString("id")?.takeIf { it.isNotBlank() }
@@ -149,18 +264,37 @@ class TikTokProfileExtractor {
         }.orEmpty()
         if (ids.isEmpty()) return null
 
+        val deadline = System.currentTimeMillis() + 12_000
         // A single post embed is occasionally gated even when the creator embed is
         // available. Try several recent posts before giving up on the full feed.
-        for (id in ids.take(3)) {
-            val media = runCatching { loadEmbed("/embed/v2/$id") }.getOrNull() ?: continue
-            val author = media.optJSONObject("videoData")?.optJSONObject("authorInfos")
-                ?: continue
+        for (id in ids.take(5)) {
+            if (System.currentTimeMillis() >= deadline) break
+            val media = runCatching {
+                loadEmbed("/embed/v2/$id", attempts = 2, initialDelayMs = 300L)
+            }.getOrNull() ?: continue
+            val video = media.optJSONObject("videoData") ?: continue
+            val author = video.optJSONObject("authorInfos") ?: continue
             val authorHandle = author.optString("uniqueId").removePrefix("@")
             if (authorHandle.isNotBlank() && !authorHandle.equals(handle, ignoreCase = true)) {
+                identityCache?.remove(handle)
                 continue
             }
             val secUid = author.optString("secUid")
-            if (secUid.isNotBlank()) return secUid
+            if (secUid.isBlank()) continue
+            val stats = video.optJSONObject("authorStats")
+            val covers = author.optJSONArray("coversLarger")
+                ?: author.optJSONArray("coversMedium")
+                ?: author.optJSONArray("covers")
+            return TikTokIdentity(
+                handle = authorHandle.ifBlank { handle },
+                secUid = secUid,
+                userId = author.optString("userId").takeIf { it.isNotBlank() },
+                nickname = author.optString("nickName").takeIf { it.isNotBlank() },
+                avatarUrl = covers?.optString(0)?.takeIf { it.startsWith("http") },
+                bio = author.optString("signature").takeIf { it.isNotBlank() },
+                followerCount = stats?.optLong("followerCount", 0L) ?: 0L,
+                videoCount = stats?.optLong("videoCount", 0L) ?: 0L,
+            )
         }
         return null
     }
@@ -204,6 +338,25 @@ class TikTokProfileExtractor {
             )
         }
         return out.values.toList()
+    }
+
+    private suspend fun fetchCreatorItemsWithRetry(
+        secUid: String,
+        referer: String,
+        forceFullProfile: Boolean,
+    ): List<MediaBundle> {
+        val rounds = if (forceFullProfile) 3 else 2
+        repeat(rounds) { round ->
+            val items = runCatching { fetchCreatorItems(secUid, referer) }
+                .getOrDefault(emptyList())
+            if (items.isNotEmpty()) return items
+            if (round < rounds - 1) {
+                // The first empty response is often a transient edge/rate-limit result.
+                // Give TikTok a moment before deciding the profile is recent-only.
+                delay(if (round == 0) 1_200L else 2_500L)
+            }
+        }
+        return emptyList()
     }
 
     private suspend fun fetchCreatorItems(

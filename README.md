@@ -2,7 +2,7 @@
 
 Snag is an Android media downloader for public social posts. It resolves links on-device, shows the available quality, and saves files to `Downloads/Snag` without ads, accounts, a backend, or an API key.
 
-Current release: **0.6.0**
+Current release: **0.6.1**
 
 ## What it does
 
@@ -14,7 +14,7 @@ Current release: **0.6.0**
 
 ## Install
 
-1. Download `Snag-0.6.0.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
+1. Download `Snag-0.6.1.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
 2. Allow installs from unknown sources for the browser or file manager you use.
 3. Android 10 or newer is required.
 
@@ -77,7 +77,7 @@ For a release build, create your own signing setup and sign `app/build/outputs/a
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.6.0.md](docs/releases/0.6.0.md).
+See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.6.1.md](docs/releases/0.6.1.md).
 
 ## Credits
 

@@ -194,7 +194,18 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
         resolve(current.url, autoSave = false, openProfile = true)
     }
 
-    private fun resolve(text: String, autoSave: Boolean, openProfile: Boolean = false) {
+    /** Retry a partial profile without returning another recent-only result. */
+    fun retryFullProfile() {
+        val current = (state as? ResolveState.Profile)?.profile ?: return
+        resolve(current.url, autoSave = false, openProfile = true, forceFullProfile = true)
+    }
+
+    private fun resolve(
+        text: String,
+        autoSave: Boolean,
+        openProfile: Boolean = false,
+        forceFullProfile: Boolean = false,
+    ) {
         val value = text.trim()
         if (value.isEmpty() || state is ResolveState.Loading) return
 
@@ -202,7 +213,7 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
         selected.clear()
         viewModelScope.launch {
             state = try {
-                when (val outcome = repository.resolve(value)) {
+                when (val outcome = repository.resolve(value, forceFullProfile)) {
                     is Outcome.Success -> {
                         if (autoSave) queueBestAvailable(outcome.bundle)
                         ResolveState.Media(outcome.bundle, outcome.failures)

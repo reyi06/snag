@@ -206,7 +206,7 @@ class MediaRepository(
 
     val historyStore: HistoryStore get() = history
 
-    suspend fun resolve(text: String): Outcome {
+    suspend fun resolve(text: String, forceFullProfile: Boolean = false): Outcome {
         val url = UrlParser.firstUrl(text)
             ?: return Outcome.Failure(null, "No link found")
 
@@ -214,7 +214,7 @@ class MediaRepository(
         if (TikTokProfileUrl.handle(url) != null) {
             val started = System.currentTimeMillis()
             val directProfile = runCatching {
-                withTimeoutOrNull(20_000) { profiles.fetchDirect(url) }
+                withTimeoutOrNull(30_000) { profiles.fetchDirect(url, forceFullProfile) }
             }.getOrNull()
             if (directProfile != null) {
                 return Outcome.Profile(

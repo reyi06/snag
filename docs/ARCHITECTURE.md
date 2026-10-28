@@ -2,7 +2,7 @@
 
 Snag is a single-module Android app built with Kotlin and Jetpack Compose. All extraction and downloads happen on the device; there is no Snag backend, account system, analytics, or billing.
 
-Current release: **0.6.0** (`versionCode` 9).
+Current release: **0.6.1** (`versionCode` 10).
 
 ## Layers
 
@@ -38,6 +38,12 @@ Public profiles use the no-login path:
 5. Filter out reposts, other authors, and posts without playable media.
 
 The WebView verification path and the optional TikWM fallback remain last-resort fallbacks.
+
+`TikTokIdentityCache` stores the stable `secUid` plus public profile metadata per handle
+for 30 days. A cache hit lets the extractor call `/api/creator/item_list/` immediately,
+even while the embeds are temporarily returning `503`. If both API scans and the fresh
+embed retries fail, the recent `videoList` is returned with `isPartial = true` and a
+**Retry full profile** action; it is never presented as a complete profile.
 
 ## Scroll mode
 

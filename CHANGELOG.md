@@ -16,6 +16,16 @@ Snag follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-28
+
+### Fixed
+
+- Public TikTok profiles now cache the stable `secUid` and metadata per handle. Later opens can call the creator item-list API directly when the creator or post embed returns a transient `503`.
+- Creator and post embeds retry with exponential backoff; post embeds try several recent posts before giving up.
+- The creator API gets a fresh scan after a short delay before Snag accepts the recent-only fallback.
+- A recent-only profile is now marked as partial, shows the known full video count when available, and displays a **Recent posts only** banner instead of silently looking complete.
+- Partial profiles include a **Retry full profile** action that bypasses the recent-only result and runs the full retry path again.
+
 ## [0.6.0] - 2026-10-28
 
 ### Added

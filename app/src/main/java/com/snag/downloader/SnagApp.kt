@@ -12,6 +12,7 @@ import com.snag.downloader.extract.FacebookExtractor
 import com.snag.downloader.extract.GenericExtractor
 import com.snag.downloader.extract.InstagramExtractor
 import com.snag.downloader.extract.TikTokExtractor
+import com.snag.downloader.extract.TikTokIdentityCache
 import com.snag.downloader.extract.TikTokProfileExtractor
 import com.snag.downloader.ui.SnagMotion
 
@@ -31,7 +32,9 @@ class SnagApp : Application(), ImageLoaderFactory {
 
     val profileBookmarks: ProfileBookmarkStore by lazy { ProfileBookmarkStore(this) }
 
-    val profiles: TikTokProfileExtractor by lazy { TikTokProfileExtractor() }
+    val profileIdentities: TikTokIdentityCache by lazy { TikTokIdentityCache(this) }
+
+    val profiles: TikTokProfileExtractor by lazy { TikTokProfileExtractor(profileIdentities) }
 
     val repository: MediaRepository by lazy {
         MediaRepository(

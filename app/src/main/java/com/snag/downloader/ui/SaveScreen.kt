@@ -783,6 +783,15 @@ private fun ProfileCard(
         Spacer(Modifier.height(12.dp))
         ProfileStats(profile)
 
+        if (profile.isPartial) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Recent posts only — open to retry the full profile",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.gold,
+            )
+        }
+
         if (!enabled) {
             Spacer(Modifier.height(12.dp))
             SnagPrimaryButton(
@@ -829,10 +838,14 @@ private fun ProfileAvatar(profile: ProfileBundle, size: androidx.compose.ui.unit
 
 @Composable
 private fun ProfileStats(profile: ProfileBundle) {
+    val count = if (profile.videoCount > 0) profile.videoCount else profile.items.size.toLong()
     Row {
         ProfileStat(formatCount(profile.followerCount), "followers")
         Spacer(Modifier.width(24.dp))
-        ProfileStat(formatCount(profile.videoCount), "videos")
+        ProfileStat(
+            formatCount(count),
+            if (profile.videoCount > 0) "videos" else "recent",
+        )
     }
 }
 
@@ -941,6 +954,36 @@ private fun ProfileSheet(
             }
 
             Spacer(Modifier.height(14.dp))
+
+            if (profile.isPartial) {
+                SnagCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    contentPadding = PaddingValues(14.dp),
+                ) {
+                    Column {
+                        Text(
+                            "Recent posts only",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = colors.gold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            profile.note
+                                ?: "TikTok did not return the full profile.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                        )
+                        SnagTextButton(
+                            text = "Retry full profile",
+                            onClick = { vm.retryFullProfile() },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+            }
 
             if (profile.items.isEmpty()) {
                 SnagEmptyState(

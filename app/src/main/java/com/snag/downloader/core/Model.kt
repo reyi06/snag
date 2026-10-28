@@ -110,6 +110,8 @@ data class ProfileBundle(
     val videoCount: Long = 0,
     val items: List<MediaBundle> = emptyList(),
     val provenance: String = "",
+    /** True when only the creator embed's recent posts are available. */
+    val isPartial: Boolean = false,
     /** Non-fatal explanation shown under the grid (for example, a partial listing). */
     val note: String? = null,
 )
