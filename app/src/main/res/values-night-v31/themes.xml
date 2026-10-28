@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Snag" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@drawable/bg_launch_dark</item>
+        <item name="android:windowSplashScreenBackground">@color/snag_ground_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_blank</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/snag_ground_dark</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:colorAccent">#E0B56A</item>
+    </style>
+</resources>

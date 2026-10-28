@@ -1,0 +1,23 @@
+# Gradle / Android
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing material and built artifacts
+*.jks
+*.keystore
+*.apk
+*.idsig
+*.aab
+*.sha256
+
+# OS noise
+.DS_Store
+Thumbs.db

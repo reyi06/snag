@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+
+    <application
+        android:name=".SnagApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="Snag"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Snag">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Snag">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Share sheet: "Share to Snag" -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- Open a TikTok link directly -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.tiktok.com" />
+                <data android:scheme="https" android:host="tiktok.com" />
+                <data android:scheme="https" android:host="m.tiktok.com" />
+                <data android:scheme="https" android:host="vm.tiktok.com" />
+                <data android:scheme="https" android:host="vt.tiktok.com" />
+                <data android:scheme="https" android:host="www.instagram.com" />
+                <data android:scheme="https" android:host="instagram.com" />
+                <data android:scheme="https" android:host="www.facebook.com" />
+                <data android:scheme="https" android:host="facebook.com" />
+                <data android:scheme="https" android:host="m.facebook.com" />
+                <data android:scheme="https" android:host="fb.watch" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".TikTokLoginActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Snag" />
+
+        <activity
+            android:name=".scroll.ClipboardRelayActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Snag.Transparent" />
+
+        <!-- Floating clipboard capture; the user taps the crown after copying a link. -->
+        <service
+            android:name=".scroll.ScrollModeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating clipboard capture for user-initiated downloads" />
+        </service>
+
+        <!-- WorkManager runs the batch queue as a data-sync foreground service. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+    </application>
+
+</manifest>
