@@ -76,6 +76,12 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
     var scrollModeEnabled by mutableStateOf(prefs.scrollModeEnabled)
         private set
 
+    var lowProfileCrown by mutableStateOf(prefs.lowProfileCrown)
+        private set
+
+    var scrollOverlayOpacity by mutableStateOf(prefs.scrollOverlayOpacity)
+        private set
+
     var tiktokSignedIn by mutableStateOf(TikTokSession.hasSessionCookie())
         private set
 
@@ -503,8 +509,21 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
         scrollModeEnabled = value
     }
 
+    fun updateLowProfileCrown(value: Boolean) {
+        prefs.lowProfileCrown = value
+        lowProfileCrown = value
+    }
+
+    fun updateScrollOverlayOpacity(value: Float) {
+        val clamped = value.coerceIn(com.snag.downloader.data.SettingsStore.MIN_OVERLAY_OPACITY, 1f)
+        prefs.scrollOverlayOpacity = clamped
+        scrollOverlayOpacity = clamped
+    }
+
     fun refreshScrollMode() {
         scrollModeEnabled = prefs.scrollModeEnabled
+        lowProfileCrown = prefs.lowProfileCrown
+        scrollOverlayOpacity = prefs.scrollOverlayOpacity
     }
 
     /**

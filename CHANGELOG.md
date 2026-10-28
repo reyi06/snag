@@ -16,6 +16,19 @@ Snag follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-28
+
+### Added
+
+- **Low-profile floating button** — a smaller black button with a white crown, alongside the default maroon/gold crown.
+- **Button opacity** — a 35–100% slider for the floating button.
+- **Live overlay updates** — changing the style or opacity rebuilds the button without restarting Scroll mode.
+- **Save feedback animation** — the floating button shows an in-progress spinner, a green success pulse, or a red error shake instead of a success toast.
+
+### Fixed
+
+- Scroll mode now keeps its notification active when a phone denies Display over other apps. The notification's **Save copied link** action remains available as a Realme/ColorOS fallback.
+
 ## [0.6.1] - 2026-10-28
 
 ### Fixed

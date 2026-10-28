@@ -30,9 +30,12 @@ class ScrollModeService : Service() {
         super.onCreate()
         ensureChannel()
         startForegroundCompat()
-        if (settings.scrollModeEnabled && Settings.canDrawOverlays(this)) {
-            showOverlay()
-        } else if (!settings.scrollModeEnabled) {
+        CaptureFeedback.setListener { state -> overlay?.render(state) }
+        if (settings.scrollModeEnabled) {
+            if (Settings.canDrawOverlays(this)) {
+                showOverlay()
+            }
+        } else {
             stopSelf()
         }
     }
@@ -45,9 +48,21 @@ class ScrollModeService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_SAVE -> ClipboardRelayActivity.launch(this)
-            else -> {
+            ACTION_REFRESH -> {
+                overlay?.detach()
+                overlay = null
                 if (settings.scrollModeEnabled && Settings.canDrawOverlays(this)) {
                     showOverlay()
+                }
+            }
+            else -> {
+                if (settings.scrollModeEnabled) {
+                    if (Settings.canDrawOverlays(this)) {
+                        showOverlay()
+                    } else {
+                        overlay?.detach()
+                        overlay = null
+                    }
                 }
             }
         }
@@ -55,6 +70,7 @@ class ScrollModeService : Service() {
     }
 
     override fun onDestroy() {
+        CaptureFeedback.setListener(null)
         overlay?.detach()
         overlay = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -65,7 +81,11 @@ class ScrollModeService : Service() {
 
     private fun showOverlay() {
         if (overlay != null) return
-        overlay = QuickSaveOverlay(this) {
+        overlay = QuickSaveOverlay(
+            context = this,
+            lowProfile = settings.lowProfileCrown,
+            opacity = settings.scrollOverlayOpacity,
+        ) {
             ClipboardRelayActivity.launch(this)
         }.also { it.attach() }
     }
@@ -134,13 +154,12 @@ class ScrollModeService : Service() {
         private const val REQUEST_OPEN = 3
         const val ACTION_SAVE = "com.snag.downloader.scroll.SAVE"
         const val ACTION_STOP = "com.snag.downloader.scroll.STOP"
+        const val ACTION_REFRESH = "com.snag.downloader.scroll.REFRESH"
 
-        /** Starts or stops the overlay to match the persisted setting and permission state. */
+        /** Starts or stops the service; the overlay is optional when Realme denies overlay access. */
         fun sync(context: Context) {
             val app = context.applicationContext as? SnagApp ?: return
-            val enabled = app.settings.scrollModeEnabled &&
-                Settings.canDrawOverlays(context)
-            if (enabled) {
+            if (app.settings.scrollModeEnabled) {
                 runCatching {
                     ContextCompat.startForegroundService(
                         context,
@@ -151,6 +170,19 @@ class ScrollModeService : Service() {
                 runCatching {
                     context.stopService(Intent(context, ScrollModeService::class.java))
                 }
+            }
+        }
+
+        /** Rebuilds the overlay after a style or opacity change. */
+        fun refresh(context: Context) {
+            val app = context.applicationContext as? SnagApp ?: return
+            if (!app.settings.scrollModeEnabled) return
+            runCatching {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, ScrollModeService::class.java)
+                        .setAction(ACTION_REFRESH),
+                )
             }
         }
 

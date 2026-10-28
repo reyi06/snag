@@ -1,7 +1,6 @@
 package com.snag.downloader.scroll
 
 import android.content.Context
-import android.widget.Toast
 import com.snag.downloader.SnagApp
 import com.snag.downloader.core.MediaKind
 import com.snag.downloader.core.SourcePlatform
@@ -30,28 +29,33 @@ internal object BackgroundCapture {
         val app = context.applicationContext as? SnagApp ?: return
         val url = UrlParser.firstUrl(text)
         if (url == null || UrlParser.classify(url) != SourcePlatform.TIKTOK) {
-            toast(app, "Copy a TikTok link first")
+            CaptureFeedback.emit(CaptureFeedbackState.Error("Copy a TikTok link first"))
             return
         }
         if (TikTokProfileUrl.handle(url) != null) {
-            toast(app, "Copy a video link, not a profile")
+            CaptureFeedback.emit(CaptureFeedbackState.Error("Copy a video link"))
             return
         }
         if (!busy.compareAndSet(false, true)) return
+        CaptureFeedback.emit(CaptureFeedbackState.Capturing)
 
         scope.launch {
             try {
                 val outcome = app.repository.resolve(url)
                 when (outcome) {
                     is Outcome.Success -> queue(app, outcome.bundle)
-                    is Outcome.Profile -> toast(app, "Copy a video link, not a profile")
-                    is Outcome.Failure -> toast(
-                        app,
-                        outcome.message.takeIf { it.isNotBlank() } ?: "Couldn't read that link",
+                    is Outcome.Profile ->
+                        CaptureFeedback.emit(CaptureFeedbackState.Error("Copy a video link"))
+                    is Outcome.Failure -> CaptureFeedback.emit(
+                        CaptureFeedbackState.Error(
+                            outcome.message.takeIf { it.isNotBlank() } ?: "Couldn't read that link"
+                        )
                     )
                 }
             } catch (t: Throwable) {
-                toast(app, t.message?.take(80) ?: "Couldn't read that link")
+                CaptureFeedback.emit(
+                    CaptureFeedbackState.Error(t.message?.take(80) ?: "Couldn't read that link")
+                )
             } finally {
                 busy.set(false)
             }
@@ -65,7 +69,7 @@ internal object BackgroundCapture {
                 entry.status != com.snag.downloader.data.DownloadStatus.FAILED
         }
         if (alreadySaved) {
-            toast(app, "Already saved")
+            CaptureFeedback.emit(CaptureFeedbackState.Success)
             return
         }
 
@@ -79,7 +83,7 @@ internal object BackgroundCapture {
                 preferH265 = app.settings.preferH265,
                 preferHighest = app.settings.preferHighest,
             ) ?: run {
-                toast(app, "No downloadable media found")
+                CaptureFeedback.emit(CaptureFeedbackState.Error("No downloadable media"))
                 return
             }
             listOf(bundle to chosen)
@@ -101,12 +105,6 @@ internal object BackgroundCapture {
                 )
             },
         )
-        toast(app, if (pairs.size == 1) "Saving video" else "Saving ${pairs.size} photos")
-    }
-
-    private fun toast(app: SnagApp, message: String) {
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            Toast.makeText(app, message, Toast.LENGTH_SHORT).show()
-        }
+        CaptureFeedback.emit(CaptureFeedbackState.Success)
     }
 }

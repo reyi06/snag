@@ -2,7 +2,7 @@
 
 Snag is an Android media downloader for public social posts. It resolves links on-device, shows the available quality, and saves files to `Downloads/Snag` without ads, accounts, a backend, or an API key.
 
-Current release: **0.6.1**
+Current release: **0.7.0**
 
 ## What it does
 
@@ -14,7 +14,7 @@ Current release: **0.6.1**
 
 ## Install
 
-1. Download `Snag-0.6.1.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
+1. Download `Snag-0.7.0.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
 2. Allow installs from unknown sources for the browser or file manager you use.
 3. Android 10 or newer is required.
 
@@ -39,10 +39,13 @@ Scroll mode is optional and off by default.
 
 1. Open **Settings → Scroll mode** and enable it.
 2. Allow **Display over other apps**.
-3. Scroll TikTok normally and copy a video link from TikTok's Share sheet.
-4. Tap the floating crown.
+3. Choose the default maroon/gold crown or the smaller black/white low-profile button, and set its opacity.
+4. Scroll TikTok normally and copy a video link from TikTok's Share sheet.
+5. Tap the floating button; it shows an in-progress animation, then a green success pulse.
 
-Snag reads the clipboard only when you tap the crown or the notification's **Save copied link** action. It does not continuously monitor the clipboard, automate TikTok, or require Accessibility access.
+If your phone denies Display over other apps, Scroll mode keeps its notification active. Use the notification's **Save copied link** action instead.
+
+Snag reads the clipboard only when you tap the floating button or **Save copied link**. It does not continuously monitor the clipboard, automate TikTok, or require Accessibility access.
 
 The persistent notification provides **Save copied link** and **Stop** actions.
 
@@ -77,7 +80,7 @@ For a release build, create your own signing setup and sign `app/build/outputs/a
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.6.1.md](docs/releases/0.6.1.md).
+See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.7.0.md](docs/releases/0.7.0.md).
 
 ## Credits
 

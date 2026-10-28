@@ -79,6 +79,18 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_SCROLL_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_SCROLL_MODE, value).apply()
 
+    /** Smaller black/white overlay instead of the maroon/gold crown. */
+    var lowProfileCrown: Boolean
+        get() = prefs.getBoolean(KEY_LOW_PROFILE_CROWN, false)
+        set(value) = prefs.edit().putBoolean(KEY_LOW_PROFILE_CROWN, value).apply()
+
+    /** Overlay opacity, clamped so the control cannot become effectively invisible. */
+    var scrollOverlayOpacity: Float
+        get() = prefs.getFloat(KEY_OVERLAY_OPACITY, 1f).coerceIn(MIN_OVERLAY_OPACITY, 1f)
+        set(value) = prefs.edit()
+            .putFloat(KEY_OVERLAY_OPACITY, value.coerceIn(MIN_OVERLAY_OPACITY, 1f))
+            .apply()
+
     /** Returns true when this exact link was already auto-downloaded before a restart. */
     fun autoWasHandled(url: String): Boolean =
         prefs.getStringSet(KEY_AUTO_HANDLED, emptySet()).orEmpty().contains(url)
@@ -91,11 +103,15 @@ class SettingsStore(context: Context) {
         prefs.edit().putStringSet(KEY_AUTO_HANDLED, next).apply()
     }
 
-    private companion object {
-        const val KEY_QUALITY = "quality_preference"
-        const val KEY_AUTO_CLIPBOARD = "auto_clipboard"
-        const val KEY_FALLBACK = "use_fallback_service"
-        const val KEY_SCROLL_MODE = "scroll_mode_enabled"
-        const val KEY_AUTO_HANDLED = "auto_handled_urls"
+    companion object {
+        const val MIN_OVERLAY_OPACITY = 0.35f
+
+        private const val KEY_QUALITY = "quality_preference"
+        private const val KEY_AUTO_CLIPBOARD = "auto_clipboard"
+        private const val KEY_FALLBACK = "use_fallback_service"
+        private const val KEY_SCROLL_MODE = "scroll_mode_enabled"
+        private const val KEY_LOW_PROFILE_CROWN = "low_profile_crown"
+        private const val KEY_OVERLAY_OPACITY = "scroll_overlay_opacity"
+        private const val KEY_AUTO_HANDLED = "auto_handled_urls"
     }
 }

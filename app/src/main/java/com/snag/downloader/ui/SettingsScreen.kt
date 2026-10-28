@@ -40,6 +40,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -57,6 +59,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.snag.downloader.data.QualityPreference
 import com.snag.downloader.scroll.ScrollModeService
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(vm: SnagViewModel) {
@@ -163,10 +166,45 @@ fun SettingsScreen(vm: SnagViewModel) {
                     "Floating crown",
                     if (AndroidSettings.canDrawOverlays(context)) "Allowed" else "Permission needed",
                 )
+                SnagDivider()
+                SettingSwitch(
+                    title = "Low-profile button",
+                    checked = vm.lowProfileCrown,
+                    onCheckedChange = { enabled ->
+                        vm.updateLowProfileCrown(enabled)
+                        ScrollModeService.refresh(context)
+                    },
+                )
+                SnagDivider()
+                Column(Modifier.padding(vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Button opacity",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            "${(vm.scrollOverlayOpacity * 100).roundToInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Slider(
+                        value = vm.scrollOverlayOpacity,
+                        onValueChange = vm::updateScrollOverlayOpacity,
+                        onValueChangeFinished = { ScrollModeService.refresh(context) },
+                        valueRange = com.snag.downloader.data.SettingsStore.MIN_OVERLAY_OPACITY..1f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
+                    )
+                }
             }
 
             Text(
-                "Copy a TikTok link, then tap the floating crown. Snag reads the clipboard only when you tap.",
+                "Copy a TikTok link, then tap the floating crown. Snag reads the clipboard only when you tap. If your phone denies overlay access, use the notification's Save copied link action.",
                 modifier = Modifier.padding(start = 4.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

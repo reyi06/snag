@@ -2,7 +2,7 @@
 
 Snag is a single-module Android app built with Kotlin and Jetpack Compose. All extraction and downloads happen on the device; there is no Snag backend, account system, analytics, or billing.
 
-Current release: **0.6.1** (`versionCode` 10).
+Current release: **0.7.0** (`versionCode` 11).
 
 ## Layers
 
@@ -50,10 +50,12 @@ embed retries fail, the recent `videoList` is returned with `isPartial = true` a
 Scroll mode is optional and off by default.
 
 - `ScrollModeService` is a low-priority `specialUse` foreground service.
-- It owns a draggable `TYPE_APPLICATION_OVERLAY` crown.
-- Tapping the crown launches `ClipboardRelayActivity`, a transparent activity that gets focus long enough to read the clipboard.
+- It owns a draggable `TYPE_APPLICATION_OVERLAY` button. The default style is maroon/gold; the low-profile style is a smaller black button with a white crown. Opacity is user-configurable.
+- Tapping the button launches `ClipboardRelayActivity`, a transparent activity that gets focus long enough to read the clipboard.
 - The URL is passed to `BackgroundCapture`, which resolves it through the normal repository and enqueues the download.
+- `CaptureFeedback` drives a spinner, green success pulse, or red error shake on the button without success toasts.
 - The service notification offers **Save copied link** and **Stop**.
+- If Display over other apps is denied, the service still runs and the notification action remains available.
 
 There is no AccessibilityService, automatic scrolling, share-sheet automation, or continuous clipboard monitoring. Android does not allow a normal background app to read the clipboard while another app is focused, so the explicit relay is required.
 
