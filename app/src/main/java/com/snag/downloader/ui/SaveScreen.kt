@@ -80,6 +80,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -283,7 +284,9 @@ private fun SaveHero(
         OutlinedTextField(
             value = input,
             onValueChange = onInputChanged,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("url-input"),
             placeholder = {
                 Text(
                     "Paste a link",
@@ -338,7 +341,9 @@ private fun SaveHero(
             SnagPrimaryButton(
                 text = if (loading) "Reading…" else "Find media",
                 onClick = onResolve,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("find-media"),
                 icon = Icons.Rounded.Search,
                 enabled = input.isNotBlank(),
                 loading = loading,
@@ -555,7 +560,9 @@ private fun MediaResult(
                     text = if (images.size == 1) "Save photo"
                     else "Save all ${images.size} photos",
                     onClick = { onSaveImages(bundle, images) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("save-images"),
                     icon = Icons.Rounded.Download,
                 )
             } else if (videos.isNotEmpty()) {
@@ -591,7 +598,9 @@ private fun MediaResult(
                     SnagPrimaryButton(
                         text = "Save video",
                         onClick = { selectedVariant?.let { onSave(bundle, it) } },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("save-video"),
                         icon = Icons.Rounded.Download,
                         enabled = selectedVariant != null,
                     )
@@ -599,6 +608,7 @@ private fun MediaResult(
                         SnagSecondaryButton(
                             text = "Audio",
                             onClick = { onSaveAudio(bundle) },
+                            modifier = Modifier.testTag("save-audio"),
                             icon = Icons.Rounded.MusicNote,
                         )
                     }
@@ -736,6 +746,7 @@ private fun ProfileCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
+            .testTag("profile-card")
             .then(
                 if (enabled) Modifier.clickable(role = Role.Button, onClick = onClick)
                 else Modifier
@@ -1063,13 +1074,17 @@ private fun ProfileActionBar(
                 SnagPrimaryButton(
                     text = if (count == 0) "Download" else "Download $count",
                     onClick = onDownloadSelected,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("download-selected"),
                     enabled = count > 0,
                 )
                 SnagSecondaryButton(
                     text = "Download all",
                     onClick = onDownloadAll,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("download-all"),
                     enabled = profile.items.isNotEmpty(),
                 )
             }

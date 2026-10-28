@@ -16,6 +16,18 @@ Snag follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-28
+
+### Added
+
+- **Instagram through yt-dlp** - public reels, video posts, single photos, and photo carousels now resolve through the bundled yt-dlp runtime. Carousel entries without video formats are saved from their best available image.
+- Automatic yt-dlp refresh at most once per day, so Instagram and YouTube extractor changes reach existing installs without waiting for a new APK.
+
+### Fixed
+
+- Instagram's captioned embed no longer exposes media URLs. Snag now uses the embed as a fallback and keeps the previous error guidance when a post is private, rate-limited, or audience-restricted.
+- Instagram failures now distinguish login walls, rate limits, removed posts, and generic extraction failures.
+
 ## [0.8.1] - 2026-10-28
 
 ### Added

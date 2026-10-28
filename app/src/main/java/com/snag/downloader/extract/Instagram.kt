@@ -1,5 +1,6 @@
 package com.snag.downloader.extract
 
+import android.content.Context
 import com.snag.downloader.core.Author
 import com.snag.downloader.core.ExtractionException
 import com.snag.downloader.core.Extractor
@@ -21,11 +22,12 @@ import java.net.URI
  * original media URLs without the logged-out feed shell. Strategy 2 falls back to
  * the canonical page's share metadata.
  */
-class InstagramExtractor : Extractor {
+class InstagramExtractor(private val context: Context) : Extractor {
 
     override val platform: SourcePlatform = SourcePlatform.INSTAGRAM
 
     override fun strategies(): List<Strategy> = listOf(
+        InstagramYtDlpStrategy(context),
         InstagramEmbedStrategy(),
         OpenGraphStrategy(id = "instagram-opengraph"),
     )

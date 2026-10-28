@@ -46,7 +46,7 @@ class SnagApp : Application(), ImageLoaderFactory {
                 listOf(
                     TikTokExtractor(fallbackEnabled = { settings.useFallbackService }),
                     YouTubeExtractor(this),
-                    InstagramExtractor(),
+                    InstagramExtractor(this),
                     FacebookExtractor(),
                     GenericExtractor(),
                 )

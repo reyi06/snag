@@ -48,11 +48,29 @@ internal object YouTubeClient {
                 try {
                     YoutubeDL.getInstance().init(context.applicationContext)
                     FFmpeg.getInstance().init(context.applicationContext)
+                    refreshYtDlp(context)
                     initialized = true
                 } catch (t: Throwable) {
                     throw ExtractionException.Failed("yt-dlp", t)
                 }
             }
+        }
+    }
+
+    /**
+     * The embedded yt-dlp becomes stale as Instagram and YouTube change.
+     * Refresh at most once a day; a failed refresh keeps the bundled binary.
+     */
+    private fun refreshYtDlp(context: Context) {
+        val prefs = context.getSharedPreferences("snag_ytdlp", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong("last_check", 0L) < UPDATE_INTERVAL_MS) return
+        prefs.edit().putLong("last_check", now).apply()
+        runCatching {
+            YoutubeDL.getInstance().updateYoutubeDL(
+                context.applicationContext,
+                YoutubeDL.UpdateChannel.STABLE,
+            )
         }
     }
 
@@ -71,6 +89,7 @@ internal object YouTubeClient {
     private data class CachedInfo(val info: VideoInfo, val at: Long)
 
     private const val CACHE_TTL_MS = 10 * 60 * 1000L
+    private const val UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000L
 }
 
 /** Single YouTube video. Video and audio are separate formats from yt-dlp. */

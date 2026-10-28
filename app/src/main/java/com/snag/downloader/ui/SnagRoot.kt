@@ -48,14 +48,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SnagRoot(vm: SnagViewModel) {
     val snackbar = remember { SnackbarHostState() }
@@ -77,6 +82,7 @@ fun SnagRoot(vm: SnagViewModel) {
 
     SnagBackground {
         Scaffold(
+            modifier = Modifier.semantics { testTagsAsResourceId = true },
             containerColor = Color.Transparent,
             snackbarHost = {
                 SnackbarHost(snackbar) { data ->
@@ -155,7 +161,8 @@ private fun ActiveDownloadBar(download: ActiveDownload) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(scheme.surface),
+            .background(scheme.surface)
+            .testTag("download-bar"),
     ) {
         Row(
             modifier = Modifier

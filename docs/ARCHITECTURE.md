@@ -2,7 +2,7 @@
 
 Snag is a single-module Android app built with Kotlin and Jetpack Compose. All extraction and downloads happen on the device; there is no Snag backend, account system, analytics, or billing.
 
-Current release: **0.8.1** (`versionCode` 13).
+Current release: **0.8.2** (`versionCode` 14).
 
 ## Layers
 
@@ -44,6 +44,17 @@ The WebView verification path and the optional TikWM fallback remain last-resort
 YouTube uses the embedded `youtubedl-android` runtime, which bundles yt-dlp, Python, and FFmpeg. `YouTubeExtractor` resolves a single video and exposes progressive video variants plus the best audio-only format. `YouTubePlaylistExtractor` reads the playlist page for video IDs, resolves the first 10 entries through yt-dlp with up to three concurrent lookups, and returns a `ProfileBundle` so playlists use the same batch sheet, queue, history, and progress notification as other platforms. Resolved video metadata is cached in memory for 10 minutes. The runtime is initialized lazily on the first YouTube request.
 
 Long playlist resolution reports progress to `SnagViewModel` and can be cancelled; a cancelled load restores the previous result instead of showing a failure.
+
+## Instagram
+
+Instagram's captioned embed used to expose `display_url` and `video_url` directly; it now returns a login shell. The primary strategy is therefore `InstagramYtDlpStrategy`, which asks yt-dlp for `--dump-single-json` with `--ignore-no-formats-error`:
+
+- single videos and reels use progressive formats with audio;
+- carousel entries with video formats become video variants;
+- image-only entries use the best thumbnail URL as the photo;
+- the old embed and OpenGraph strategies remain fallbacks.
+
+yt-dlp is refreshed from the stable GitHub release at most once per day. The refresh is best-effort: failures keep the bundled binary, and the timestamp prevents a retry loop.
 
 `TikTokIdentityCache` stores the stable `secUid` plus public profile metadata per handle
 for 30 days. A cache hit lets the extractor call `/api/creator/item_list/` immediately,

@@ -2,7 +2,7 @@
 
 Snag is an Android media downloader for public social posts. It resolves links on-device, shows the available quality, and saves files to `Downloads/Snag` without ads, accounts, a backend, or an API key.
 
-Current release: **0.8.1**
+Current release: **0.8.2**
 
 ## What it does
 
@@ -10,6 +10,7 @@ Current release: **0.8.1**
 - Saves YouTube videos, YouTube audio, and YouTube playlists through an embedded yt-dlp runtime.
 - Loads public TikTok profiles and creator batches without signing in. Profiles use TikTok's creator embed and creator item-list API.
 - Saves Instagram reels, video posts, and photos, including carousel images; Facebook post links remain supported.
+- Refreshes the bundled yt-dlp binary at most once per day so extractor fixes reach existing installs.
 - Accepts multiple pasted links as one batch and uses the same queue, history, progress, and file manager.
 - Shows an in-app download bar with the current file, percentage, size, and transfer speed while the shared queue runs.
 - Keeps a local library and download history.
@@ -17,7 +18,7 @@ Current release: **0.8.1**
 
 ## Install
 
-1. Download `Snag-0.8.1.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
+1. Download `Snag-0.8.2.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
 2. Allow installs from unknown sources for the browser or file manager you use.
 3. Android 10 or newer on a 64-bit ARM device is required. The published APK is `arm64-v8a`, which covers most Android phones.
 
@@ -78,12 +79,12 @@ For a release build, create your own signing setup and sign `app/build/outputs/a
 - `app/src/main/java/com/snag/downloader/extract` — TikTok, Instagram, Facebook, OpenGraph
 - `app/src/main/java/com/snag/downloader/data` — repository, history, settings
 - `app/src/main/java/com/snag/downloader/download` — MediaStore download queue
-- `app/src/main/java/com/snag/downloader/scroll` — Scroll mode overlay and clipboard relay
-- `app/src/main/java/com/snag/downloader/ui` — Compose screens
+- `app/src/main/java/com/snag/downloader/scroll` - Scroll mode overlay and clipboard relay
+- `app/src/main/java/com/snag/downloader/ui` - Compose screens
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.8.1.md](docs/releases/0.8.1.md).
+See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.8.2.md](docs/releases/0.8.2.md).
 
 ## Credits
 
