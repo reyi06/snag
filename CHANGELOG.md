@@ -16,6 +16,19 @@ Snag follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-28
+
+### Added
+
+- **YouTube support** through the embedded yt-dlp runtime: video downloads, audio-only downloads, and playlists. YouTube playlists open in the shared batch sheet.
+- **Multi-link batch input** — pasting multiple supported links extracts each into one batch sheet for a shared download queue.
+- YouTube host support in the share/VIEW intent filters and library platform labels.
+
+### Changed
+
+- Snag is now licensed under **GPL-3.0** to comply with the GPL-licensed `youtubedl-android` runtime used for yt-dlp.
+- The APK includes the yt-dlp, Python, and FFmpeg native runtimes, so it is substantially larger and takes longer to initialize on first use.
+
 ## [0.7.0] - 2026-10-28
 
 ### Added

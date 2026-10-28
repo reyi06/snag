@@ -562,9 +562,10 @@ class SnagViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private companion object {
-        val AUDIO_EXTENSIONS = setOf("mp3", "m4a", "aac", "ogg", "opus", "wav")
+        val AUDIO_EXTENSIONS = setOf("mp3", "m4a", "aac", "ogg", "opus", "wav", "webm")
         val AUTO_PLATFORMS = setOf(
             SourcePlatform.TIKTOK,
+            SourcePlatform.YOUTUBE,
             SourcePlatform.INSTAGRAM,
             SourcePlatform.FACEBOOK,
         )

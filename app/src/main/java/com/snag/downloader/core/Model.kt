@@ -7,6 +7,7 @@ package com.snag.downloader.core
 
 enum class SourcePlatform(val id: String, val label: String) {
     TIKTOK("tiktok", "TikTok"),
+    YOUTUBE("youtube", "YouTube"),
     INSTAGRAM("instagram", "Instagram"),
     FACEBOOK("facebook", "Facebook"),
     GENERIC("generic", "Any link"),

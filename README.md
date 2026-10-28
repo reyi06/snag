@@ -2,19 +2,21 @@
 
 Snag is an Android media downloader for public social posts. It resolves links on-device, shows the available quality, and saves files to `Downloads/Snag` without ads, accounts, a backend, or an API key.
 
-Current release: **0.7.0**
+Current release: **0.8.0**
 
 ## What it does
 
 - Saves public TikTok videos, photo carousels, and audio.
+- Saves YouTube videos, YouTube audio, and YouTube playlists through an embedded yt-dlp runtime.
 - Loads public TikTok profiles and creator batches without signing in. Profiles use TikTok's creator embed and creator item-list API.
-- Saves Instagram and Facebook post links, with a generic OpenGraph fallback.
+- Saves Instagram reels, video posts, and photos, including carousel images; Facebook post links remain supported.
+- Accepts multiple pasted links as one batch and uses the same queue, history, progress, and file manager.
 - Keeps a local library and download history.
 - Provides a **Scroll mode** floating crown for saving a TikTok link while browsing.
 
 ## Install
 
-1. Download `Snag-0.7.0.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
+1. Download `Snag-0.8.0.apk` from the [latest release](https://github.com/reyi06/snag/releases/latest).
 2. Allow installs from unknown sources for the browser or file manager you use.
 3. Android 10 or newer is required.
 
@@ -80,7 +82,7 @@ For a release build, create your own signing setup and sign `app/build/outputs/a
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.7.0.md](docs/releases/0.7.0.md).
+See [CHANGELOG.md](CHANGELOG.md). Release notes for this build are in [docs/releases/0.8.0.md](docs/releases/0.8.0.md).
 
 ## Credits
 
@@ -88,4 +90,4 @@ Public-profile protocol informed by [tt-dlp](https://github.com/bajaam/tt-dlp) u
 
 ## License
 
-Snag is proprietary software. The source is published for inspection; no reuse or redistribution rights are granted. See [LICENSE](LICENSE).
+Snag is free software licensed under the **GNU General Public License v3.0**. The source is available under that license; redistribution and modification must comply with the GPL. See [LICENSE](LICENSE). The yt-dlp Android wrapper (`youtubedl-android`) is GPL-3.0; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

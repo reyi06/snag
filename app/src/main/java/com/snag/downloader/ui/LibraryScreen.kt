@@ -443,6 +443,7 @@ private fun meta(entry: HistoryEntry): String = listOfNotNull(
 ).joinToString(" · ")
 
 private fun platformLabel(id: String): String? = when (id) {
+    "youtube" -> "YouTube"
     "tiktok" -> "TikTok"
     "instagram" -> "Instagram"
     "facebook" -> "Facebook"

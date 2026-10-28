@@ -2,14 +2,14 @@
 
 Snag is a single-module Android app built with Kotlin and Jetpack Compose. All extraction and downloads happen on the device; there is no Snag backend, account system, analytics, or billing.
 
-Current release: **0.7.0** (`versionCode` 11).
+Current release: **0.8.0** (`versionCode` 12).
 
 ## Layers
 
 ```
 ui/          Compose screens and the view model
 core/        Media models, extractor contracts, HTTP, WebView gate
-extract/     TikTok, Instagram, Facebook, OpenGraph
+extract/     TikTok, YouTube, Instagram, Facebook, OpenGraph
 data/        Repository, history, settings, bookmarks
 download/    WorkManager queue and MediaStore writes
 scroll/      Floating crown, clipboard relay, background capture
@@ -38,6 +38,10 @@ Public profiles use the no-login path:
 5. Filter out reposts, other authors, and posts without playable media.
 
 The WebView verification path and the optional TikWM fallback remain last-resort fallbacks.
+
+## YouTube
+
+YouTube uses the embedded `youtubedl-android` runtime, which bundles yt-dlp, Python, and FFmpeg. `YouTubeExtractor` resolves a single video and exposes progressive video variants plus the best audio-only format. `YouTubePlaylistExtractor` reads the playlist page for video IDs, resolves up to 20 entries through yt-dlp, and returns a `ProfileBundle` so playlists use the same batch sheet, queue, history, and progress notification as other platforms. The runtime is initialized lazily on the first YouTube request.
 
 `TikTokIdentityCache` stores the stable `secUid` plus public profile metadata per handle
 for 30 days. A cache hit lets the extractor call `/api/creator/item_list/` immediately,

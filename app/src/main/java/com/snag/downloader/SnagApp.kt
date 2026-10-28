@@ -14,6 +14,8 @@ import com.snag.downloader.extract.InstagramExtractor
 import com.snag.downloader.extract.TikTokExtractor
 import com.snag.downloader.extract.TikTokIdentityCache
 import com.snag.downloader.extract.TikTokProfileExtractor
+import com.snag.downloader.extract.YouTubeExtractor
+import com.snag.downloader.extract.YouTubePlaylistExtractor
 import com.snag.downloader.ui.SnagMotion
 
 /**
@@ -36,11 +38,14 @@ class SnagApp : Application(), ImageLoaderFactory {
 
     val profiles: TikTokProfileExtractor by lazy { TikTokProfileExtractor(profileIdentities) }
 
+    val youtubePlaylists: YouTubePlaylistExtractor by lazy { YouTubePlaylistExtractor(this) }
+
     val repository: MediaRepository by lazy {
         MediaRepository(
             registry = ExtractorRegistry(
                 listOf(
                     TikTokExtractor(fallbackEnabled = { settings.useFallbackService }),
+                    YouTubeExtractor(this),
                     InstagramExtractor(),
                     FacebookExtractor(),
                     GenericExtractor(),
@@ -48,6 +53,7 @@ class SnagApp : Application(), ImageLoaderFactory {
             ),
             profiles = profiles,
             history = history,
+            youtubePlaylists = youtubePlaylists,
         )
     }
 }

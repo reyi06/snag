@@ -1,5 +1,14 @@
 # Third-Party Notices
 
+Snag is licensed under GPL-3.0 because it includes `youtubedl-android`, which is
+GPL-3.0. The full source for Snag is published under the same license.
+
+## youtubedl-android
+
+- Project: https://github.com/yausername/youtubedl-android
+- License: GNU General Public License v3.0
+- Bundles yt-dlp (Unlicense) and FFmpeg components; their upstream notices apply.
+
 ## tt-dlp
 
 The public-profile protocol used by Snag (creator embed, post embed, creator item-list pagination) is informed by and validated against [tt-dlp](https://github.com/bajaam/tt-dlp), copyright 2026 tt-dlp contributors, licensed under the MIT License.

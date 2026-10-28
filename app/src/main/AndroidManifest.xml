@@ -15,6 +15,7 @@
     <application
         android:name=".SnagApp"
         android:allowBackup="true"
+        android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Snag"
@@ -50,6 +51,10 @@
                 <data android:scheme="https" android:host="m.tiktok.com" />
                 <data android:scheme="https" android:host="vm.tiktok.com" />
                 <data android:scheme="https" android:host="vt.tiktok.com" />
+                <data android:scheme="https" android:host="www.youtube.com" />
+                <data android:scheme="https" android:host="youtube.com" />
+                <data android:scheme="https" android:host="m.youtube.com" />
+                <data android:scheme="https" android:host="youtu.be" />
                 <data android:scheme="https" android:host="www.instagram.com" />
                 <data android:scheme="https" android:host="instagram.com" />
                 <data android:scheme="https" android:host="www.facebook.com" />

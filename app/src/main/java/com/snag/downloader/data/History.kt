@@ -13,6 +13,8 @@ import com.snag.downloader.core.ExtractionException
 import com.snag.downloader.extract.TikTokProfileExtractor
 import com.snag.downloader.extract.TikTokProfileFallback
 import com.snag.downloader.extract.TikTokProfileUrl
+import com.snag.downloader.extract.YouTubePlaylistExtractor
+import com.snag.downloader.extract.YouTubePlaylistUrl
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
@@ -202,13 +204,53 @@ class MediaRepository(
     private val registry: ExtractorRegistry,
     private val profiles: TikTokProfileExtractor,
     private val history: HistoryStore,
+    private val youtubePlaylists: YouTubePlaylistExtractor,
 ) {
 
     val historyStore: HistoryStore get() = history
 
     suspend fun resolve(text: String, forceFullProfile: Boolean = false): Outcome {
-        val url = UrlParser.firstUrl(text)
+        val urls = UrlParser.allUrls(text)
+        val url = urls.firstOrNull()
             ?: return Outcome.Failure(null, "No link found")
+
+        if (urls.size > 1) {
+            val items = mutableListOf<MediaBundle>()
+            for (candidate in urls.take(20)) {
+                val bundle = runCatching { registry.resolve(candidate).bundle }.getOrNull()
+                if (bundle != null) items.add(bundle)
+            }
+            if (items.isNotEmpty()) {
+                return Outcome.Profile(
+                    profile = ProfileBundle(
+                        platform = items.first().platform,
+                        url = urls.first(),
+                        handle = "batch",
+                        nickname = "Batch",
+                        videoCount = items.size.toLong(),
+                        items = items,
+                        provenance = "multi-link",
+                        note = "Batch of ${items.size} links",
+                    ),
+                    failures = emptyList(),
+                    elapsedMs = 0,
+                )
+            }
+        }
+
+        if (YouTubePlaylistUrl.isPlaylist(url)) {
+            val started = System.currentTimeMillis()
+            val playlist = runCatching {
+                withTimeoutOrNull(180_000) { youtubePlaylists.fetch(url) }
+            }.getOrNull()
+            if (playlist != null) {
+                return Outcome.Profile(
+                    profile = playlist,
+                    failures = emptyList(),
+                    elapsedMs = System.currentTimeMillis() - started,
+                )
+            }
+        }
 
         // Handles look like /@name; video links keep the normal pipeline.
         if (TikTokProfileUrl.handle(url) != null) {
